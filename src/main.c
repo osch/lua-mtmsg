@@ -1,6 +1,3 @@
-#include <unistd.h>
-#include <signal.h>
-
 #include "main.h"
 #include "async_util.h"
 #include "buffer.h"

@@ -1,4 +1,6 @@
 # mtmsg 
+[![Licence](http://img.shields.io/badge/Licence-MIT-brightgreen.svg)](LICENSE)
+[![Build Status](https://travis-ci.org/osch/lua-mtmsg.png?branch=master)](https://travis-ci.org/osch/lua-mtmsg)
 
 Low-level multi-threading message buffers for the [Lua] scripting language.
 
@@ -6,7 +8,7 @@ This package provides in-memory message buffers for inter-thread communication.
 The implementation is independent from the underlying threading library
 (e.g. [Lanes] or [lua-llthreads2]).
 
-This package is available via LuaRocks, see https://luarocks.org/modules/osch/mtmsg.
+This package is also available via LuaRocks, see https://luarocks.org/modules/osch/mtmsg.
 
 [Lua]:               https://www.lua.org
 [Lanes]:             https://luarocks.org/modules/benoitgermain/lanes
@@ -54,7 +56,7 @@ print(thread:join())
 
 ### Module Functions
 
-* `mtmsg.newbuffer([name,][size1[,size2[,grow]]]`
+* **`mtmsg.newbuffer([name,][size1[,size2[,grow]]]`**
 
   Creates a new buffer and returns a lua object for referencing the
   created buffer.
@@ -72,7 +74,7 @@ print(thread:join())
   The created buffer is garbage collected if the last object referencing this
   buffer vanishes.
 
-* `mtmsg.buffer(id|name)`
+* **`mtmsg.buffer(id|name)`**
 
   Creates a lua object for referencing an existing buffer. The buffer must
   be referenced by its `id` or `name`.
@@ -84,7 +86,7 @@ print(thread:join())
              buffer was created with `mtmsg.newbuffer()` or with 
              `listener:newbuffer()`.
              
-* `mtmsg.newlistener([name])`
+* **`mtmsg.newlistener([name])`**
 
   Creates a new buffer listener and returns a lua object for referencing the
   created listener.
@@ -94,7 +96,7 @@ print(thread:join())
   The created listener is garbage collected if the last reference object to this
   listener vanishes.
 
-* `mtmsg.listener(id|name)`
+* **`mtmsg.listener(id|name)`**
 
   Creates a lua object for referencing an existing listener. The listener must
   be referenced by its `id` or `name`.
@@ -107,28 +109,28 @@ print(thread:join())
              
 ### Buffer Methods
 
-* `buffer:id()`
+* **`buffer:id()`**
   
   Returns the buffer id as integer. The id is generated when `mtmsg.newbuffer()`
   or `listener:newbuffer()` is invoked and is unique for the whole process.
 
-* `buffer:name()`
+* **`buffer:name()`**
 
   Returns the buffer's name that was given to `mtmsg.newbuffer()` or to
   `listener:newbuffer()`.
   
-* `buffer:addmsg(...)`
+* **`buffer:addmsg(...)`**
 
   Adds the arguments together as one message to the buffer. Arguments can be
   simple data types (string, number, boolean, light user data).
   
-* `buffer:setmsg(...)`
+* **`buffer:setmsg(...)`**
 
   Sets the arguments together as one message into the buffer. All other messages
   in this buffer are discarded. Arguments can be simple data types 
   (string, number, boolean, light user data).
   
-* `buffer:nextmsg([timeout])`
+* **`buffer:nextmsg([timeout])`**
 
   Returns all the arguments that were given as one message by invoking the method
   `buffer:addmsg()` or `buffer:setmsg()`. The returned message is removed
@@ -141,17 +143,17 @@ print(thread:join())
 ### Listener Methods
 
 
-* `listener:id()`
+* **`listener:id()`**
   
   Returns the listener id as integer. The id is generated when `mtmsg.newlistener()`
   is invoked and is unique for the whole process.
 
-* `listener:name()`
+* **`listener:name()`**
 
   Returns the listener's name that was given to `mtmsg.newlistener()`.
 
 
-* `listener:newbuffer([name,][size1[,size2[,grow]]]`
+* **`listener:newbuffer([name,][size1[,size2[,grow]]]`**
 
   Creates a new buffer that is connected to the listener and returns a lua object 
   for referencing the created buffer.
@@ -161,7 +163,7 @@ print(thread:join())
   The created buffer is garbage collected if the last object referencing this
   buffer vanishes. The buffer is not referenced by the connected listener.
 
-* `listener:nextmsg([timeout])`
+* **`listener:nextmsg([timeout])`**
 
   Returns all the arguments that were given as one message by invoking the method
   `buffer:addmsg()` or `buffer:setmsg()` to one of the buffers that are

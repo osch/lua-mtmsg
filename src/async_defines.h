@@ -25,7 +25,7 @@
     && !defined(MTMSG_ASYNC_USE_STDATOMIC) \
     && !defined(MTMSG_ASYNC_USE_GNU)
 
-    #if defined(WIN32)
+    #if defined(WIN32) || defined(_WIN32)
         #define MTMSG_ASYNC_USE_WIN32
     #elif __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
         #define MTMSG_ASYNC_USE_STDATOMIC

@@ -116,6 +116,9 @@ typedef struct
 
 #elif defined(MTMSG_ASYNC_USE_WINTHREAD)
     CRITICAL_SECTION      lock;
+
+#elif defined (MTMSG_ASYNC_USE_STDTHREAD)
+    mtx_t                 lock;
 #endif
 } Lock;
 
@@ -141,6 +144,10 @@ static inline void async_lock_acquire(Lock* lock)
 
 #elif defined(MTMSG_ASYNC_USE_WINTHREAD)
     EnterCriticalSection(&lock->lock);
+
+#elif defined(MTMSG_ASYNC_USE_STDTHREAD)
+    int rc = mtx_lock(&lock->lock);
+    if (rc != thrd_success)  { async_util_abort(rc, __LINE__); }
 #endif
 }
 
@@ -155,6 +162,10 @@ static inline void async_lock_release(Lock* lock)
 
 #elif defined(MTMSG_ASYNC_USE_WINTHREAD)
     LeaveCriticalSection(&lock->lock);
+
+#elif defined(MTMSG_ASYNC_USE_STDTHREAD)
+    int rc = mtx_unlock(&lock->lock);
+    if (rc != thrd_success)  { async_util_abort(rc, __LINE__); }
 #endif
 }
 
@@ -171,6 +182,10 @@ typedef struct
     CRITICAL_SECTION      mutex;
     volatile int          waitingCounter;
     HANDLE                event;
+
+#elif defined(MTMSG_ASYNC_USE_STDTHREAD)
+    mtx_t                 mutex;
+    cnd_t                 condition;
 #endif
 } Mutex;
 
@@ -196,6 +211,10 @@ static inline void async_mutex_lock(Mutex* mutex)
 
 #elif defined(MTMSG_ASYNC_USE_WINTHREAD)
     EnterCriticalSection(&mutex->mutex);
+
+#elif defined(MTMSG_ASYNC_USE_STDTHREAD)
+    int rc = mtx_lock(&mutex->mutex);
+    if (rc != thrd_success)  { async_util_abort(rc, __LINE__); }
 #endif
 }
 
@@ -212,6 +231,14 @@ static inline bool async_mutex_trylock(Mutex* mutex)
     }
 #elif defined(MTMSG_ASYNC_USE_WINTHREAD)
     return TryEnterCriticalSection(&mutex->mutex) != 0;
+
+#elif defined(MTMSG_ASYNC_USE_STDTHREAD)
+    int rc = mtx_trylock(&mutex->mutex);
+    if (rc == thrd_success || rc == thrd_busy) {
+        return rc == thrd_success;
+    } else {
+        return async_util_abort(rc, __LINE__); 
+    }
 #endif
 }
 
@@ -226,6 +253,10 @@ static inline void async_mutex_unlock(Mutex* mutex)
 
 #elif defined(MTMSG_ASYNC_USE_WINTHREAD)
     LeaveCriticalSection(&mutex->mutex);
+
+#elif defined(MTMSG_ASYNC_USE_STDTHREAD)
+    int rc = mtx_unlock(&mutex->mutex);
+    if (rc != thrd_success)  { async_util_abort(rc, __LINE__); }
 #endif
 }
 
@@ -255,6 +286,9 @@ static inline void async_mutex_notify(Mutex* mutex)
             async_util_abort(GetLastError(), __LINE__);
         }
     }
+#elif defined(MTMSG_ASYNC_USE_STDTHREAD)
+    int rc = cnd_signal(&mutex->condition);
+    if (rc != thrd_success)  { async_util_abort(rc, __LINE__); }
 #endif
 }
 

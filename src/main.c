@@ -1,20 +1,25 @@
+#include <unistd.h>
+#include <signal.h>
+
 #include "main.h"
 #include "async_util.h"
 #include "buffer.h"
 #include "listener.h"
 
+
 const char* const MTMSG_MODULE_NAME = "mtmsg";
 
 static AtomicPtr atomic_lock_holder = 0;
-static bool      initialized = false;
+static bool      initialized        = false;
+static int       initCounter        = 0;
 
 Mutex*        mtmsg_global_lock = NULL;
 AtomicCounter mtmsg_id_counter  = 0;
-AtomicCounter mtmsg_abort_flag  = 0;
+bool          mtmsg_abort_flag  = false;
 
 static int internalError(lua_State* L, const char* text, int line) 
 {
-    return luaL_error(L, "%s (%s:%d)", text, MTMSG_MODULE_NAME, line);
+    return luaL_error(L, "Internal error: %s (%s:%d)", text, MTMSG_MODULE_NAME, line);
 }
 
 
@@ -22,6 +27,18 @@ static int Mtmsg_time(lua_State* L)
 {
     lua_pushnumber(L, mtmsg_current_time_seconds());
     return 1;
+}
+
+static void mtmsg_abort(bool newFlag)
+{
+    async_mutex_lock(mtmsg_global_lock);
+
+    mtmsg_abort_flag = newFlag;
+    mtmsg_buffer_abort_all(newFlag);
+    mtmsg_listener_abort_all(newFlag);
+
+    async_mutex_notify(mtmsg_global_lock);
+    async_mutex_unlock(mtmsg_global_lock);
 }
 
 static int Mtmsg_abort(lua_State* L)
@@ -33,20 +50,15 @@ static int Mtmsg_abort(lua_State* L)
         luaL_checktype(L, arg, LUA_TBOOLEAN);
         newFlag = lua_toboolean(L, arg++);
     }
-    async_mutex_lock(mtmsg_global_lock);
-
-    atomic_set(&mtmsg_abort_flag, newFlag);
-    mtmsg_buffer_abort_all(newFlag);
-    mtmsg_listener_abort_all(newFlag);
-
-    async_mutex_notify(mtmsg_global_lock);
-    async_mutex_unlock(mtmsg_global_lock);
+    mtmsg_abort(newFlag);
     return 0;
 }
 
 static int Mtmsg_isAbort(lua_State* L)
 {
-    lua_pushboolean(L, atomic_get(&mtmsg_abort_flag));
+    async_mutex_lock(mtmsg_global_lock);
+    lua_pushboolean(L, mtmsg_abort_flag);
+    async_mutex_unlock(mtmsg_global_lock);
     return 1;
 }
 
@@ -62,7 +74,7 @@ static int Mtmsg_sleep(lua_State* L)
     async_mutex_lock(mtmsg_global_lock);
 
 again:
-    if (atomic_get(&mtmsg_abort_flag)) {
+    if (mtmsg_abort_flag) {
         async_mutex_notify(mtmsg_global_lock);
         async_mutex_unlock(mtmsg_global_lock);
         return luaL_error(L, "operation was aborted");
@@ -80,12 +92,23 @@ again:
 
 static const luaL_Reg ModuleFunctions[] = 
 {
-    { "time",       Mtmsg_time       },
-    { "abort",      Mtmsg_abort      },
-    { "isabort",    Mtmsg_isAbort    },
-    { "sleep",      Mtmsg_sleep      },
-    { NULL,         NULL } /* sentinel */
+    { "time",          Mtmsg_time         },
+    { "abort",         Mtmsg_abort        },
+    { "isabort",       Mtmsg_isAbort      },
+    { "sleep",         Mtmsg_sleep        },
+    { NULL,            NULL } /* sentinel */
 };
+
+static int handleClosingLuaState(lua_State* L)
+{
+    async_mutex_lock(mtmsg_global_lock);
+    initCounter -= 1;
+    if (initCounter == 0) {
+        
+    }
+    async_mutex_unlock(mtmsg_global_lock);
+    return 0;
+}
 
 
 DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
@@ -102,7 +125,7 @@ DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
     if (atomic_get_ptr(&atomic_lock_holder) == NULL) {
         Mutex* newLock = malloc(sizeof(Mutex));
         if (!newLock) {
-            return internalError(L, "Error initializing lock", __LINE__);
+            return internalError(L, "initialize lock failed", __LINE__);
         }
         async_mutex_init(newLock);
 
@@ -111,6 +134,8 @@ DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
             free(newLock);
         }
     }
+    /* ---------------------------------------- */
+
     async_mutex_lock(atomic_get_ptr(&atomic_lock_holder));
     {
         if (!initialized) {
@@ -126,12 +151,32 @@ DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
             }
             mtmsg_id_counter = c;
             initialized = true;
-        }   
+        }
+
+
+        /* check if initialization has been done for this lua state */
+        lua_pushlightuserdata(L, (void*)&initialized); /* unique void* key */
+            lua_rawget(L, LUA_REGISTRYINDEX); 
+            bool alreadyInitializedForThisLua = !lua_isnil(L, -1);
+        lua_pop(L, 1);
+        
+        if (!alreadyInitializedForThisLua) 
+        {
+            initCounter += 1;
+            
+            lua_pushlightuserdata(L, (void*)&initialized); /* unique void* key */
+                lua_newuserdata(L, 1); /* sentinel for closing lua state */
+                    lua_newtable(L); /* metatable for sentinel */
+                        lua_pushstring(L, "__gc");
+                            lua_pushcfunction(L, handleClosingLuaState);
+                        lua_rawset(L, -3); /* metatable.__gc = handleClosingLuaState */
+                    lua_setmetatable(L, -2); /* sets metatable for sentinal table */
+            lua_rawset(L, LUA_REGISTRYINDEX); /* sets sentinel as value for unique void* in registry */
+        }
     }
     async_mutex_unlock(mtmsg_global_lock);
 
     /* ---------------------------------------- */
-
     
     int n = lua_gettop(L);
     

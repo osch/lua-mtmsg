@@ -28,6 +28,10 @@ void mtmsg_async_lock_init(Lock* lock)
 
 #elif defined(MTMSG_ASYNC_USE_WINTHREAD)
     InitializeCriticalSection(&lock->lock);
+
+#elif defined (MTMSG_ASYNC_USE_STDTHREAD)
+    int rc = mtx_init(&lock->lock, mtx_plain | mtx_recursive);
+    if (rc != thrd_success) { async_util_abort(rc, __LINE__); }
 #endif
 }
 
@@ -38,6 +42,8 @@ void mtmsg_async_lock_destruct(Lock* lock)
     pthread_mutexattr_destroy(&lock->attr);
 #elif defined(MTMSG_ASYNC_USE_WINTHREAD)
     DeleteCriticalSection(&lock->lock);
+#elif defined (MTMSG_ASYNC_USE_STDTHREAD)
+    mtx_destroy(&lock->lock);
 #endif
 }
 
@@ -69,6 +75,13 @@ void mtmsg_async_mutex_init(Mutex* mutex)
                                 NULL); /* unnamed */
 
     if (mutex->event == NULL) { async_util_abort((int)mutex->event, __LINE__); }
+
+#elif defined(MTMSG_ASYNC_USE_STDTHREAD)
+    int rc = mtx_init(&mutex->mutex, mtx_plain | mtx_recursive);
+    if (rc != thrd_success) { async_util_abort(rc, __LINE__); }
+
+    rc = cnd_init(&mutex->condition);
+    if (rc != thrd_success) { async_util_abort(rc, __LINE__); }
 #endif
 }
 
@@ -81,6 +94,9 @@ void mtmsg_async_mutex_destruct(Mutex* mutex)
 #elif defined(MTMSG_ASYNC_USE_WINTHREAD)
     CloseHandle(mutex->event);
     DeleteCriticalSection(&mutex->mutex);
+#elif defined(MTMSG_ASYNC_USE_STDTHREAD)
+    cnd_destroy(&mutex->condition);
+    mtx_destroy(&mutex->mutex);
 #endif
 }
 
@@ -102,6 +118,11 @@ void mtmsg_async_mutex_wait(Mutex* mutex)
     mutex->waitingCounter -= 1;
     
     if  (rc != WAIT_OBJECT_0) { async_util_abort(rc, __LINE__); }
+
+#elif defined(MTMSG_ASYNC_USE_STDTHREAD)
+    int rc = cnd_wait(&mutex->condition, &mutex->mutex);
+    if (rc != 0) { async_util_abort(rc, __LINE__); }
+
 #endif
 }
 
@@ -139,5 +160,23 @@ bool mtmsg_async_mutex_wait_millis(Mutex* mutex, int timeoutMillis)
     } else {
         return async_util_abort(rc, __LINE__);
     }
+#elif defined(MTMSG_ASYNC_USE_STDTHREAD)
+    struct timespec abstime;
+    struct timeval tv;  gettimeofday(&tv, NULL);
+    
+    abstime.tv_sec = tv.tv_sec + timeoutMillis / 1000;
+    abstime.tv_nsec = tv.tv_usec * 1000 + 1000 * 1000 * (timeoutMillis % 1000);
+    abstime.tv_sec += abstime.tv_nsec / (1000 * 1000 * 1000);
+    abstime.tv_nsec %= (1000 * 1000 * 1000);
+    
+    int rc = cnd_timedwait(&mutex->condition, &mutex->mutex, &abstime);
+
+    if (rc == thrd_success || rc == thrd_timedout) {
+        return (rc == thrd_success);
+    }
+    else {
+        return async_util_abort(rc, __LINE__);
+    }
+
 #endif
 }

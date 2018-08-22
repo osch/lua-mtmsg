@@ -6,7 +6,7 @@
 
 extern Mutex*        mtmsg_global_lock;
 extern AtomicCounter mtmsg_id_counter;
-extern AtomicCounter mtmsg_abort_flag;
+extern bool          mtmsg_abort_flag;
 
 DLL_PUBLIC int luaopen_mtmsg(lua_State* L);
 

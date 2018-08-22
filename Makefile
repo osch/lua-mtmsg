@@ -82,5 +82,5 @@ build: init
 
 clean:
 	rm -rf $(BUILD_DIR)
-	find "$(PROJ_DIR)" -name "*.o" -o -name "*.so"  |xargs rm 
+	find "$(PROJ_DIR)" -name "*.o" -o -name "*.so"  |xargs rm -f
 

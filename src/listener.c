@@ -165,6 +165,12 @@ static int Mtmsg_listener(lua_State* L)
     
     async_mutex_lock(mtmsg_global_lock);
 
+    if (mtmsg_abort_flag) {
+        async_mutex_notify(mtmsg_global_lock);
+        async_mutex_unlock(mtmsg_global_lock);
+        return luaL_error(L, "operation was aborted");
+    }
+
     MsgListener* listener;
     if (listenerName != NULL) {
         listener = findListenerWithName(listenerName, listenerNameLength);
@@ -204,6 +210,12 @@ static int Mtmsg_newListener(lua_State* L)
     mtmsg_membuf_init(&userData->tmp, 0, 1);
 
     async_mutex_lock(mtmsg_global_lock);
+
+    if (mtmsg_abort_flag) {
+        async_mutex_notify(mtmsg_global_lock);
+        async_mutex_unlock(mtmsg_global_lock);
+        return luaL_error(L, "operation was aborted");
+    }
 
     MsgListener* otherListener = findListenerWithName(listenerName, listenerNameLength);
     if (otherListener) {

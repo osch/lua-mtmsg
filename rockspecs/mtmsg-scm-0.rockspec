@@ -8,6 +8,7 @@ description = {
   summary = "Low-level multi-threading message buffers",
   homepage = "https://github.com/osch/lua-mtmsg",
   license = "MIT/X11",
+  labels = { "threads" },
   detailed = [[
     Low-level in-memory message buffers for inter-thread communication. 
     This implementation is independent from the underlying threading library

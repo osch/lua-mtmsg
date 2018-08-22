@@ -39,10 +39,13 @@
 /* -------------------------------------------------------------------------------------------- */
 
 #if    !defined(MTMSG_ASYNC_USE_WINTHREAD) \
-    && !defined(MTMSG_ASYNC_USE_PTHREAD)
+    && !defined(MTMSG_ASYNC_USE_PTHREAD) \
+    && !defined(MTMSG_ASYNC_USE_STDTHREAD)
     
     #ifdef MTMSG_ASYNC_USE_WIN32
         #define MTMSG_ASYNC_USE_WINTHREAD
+    #elif __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_THREADS__)
+        #define MTMSG_ASYNC_USE_STDTHREAD
     #else
         #define MTMSG_ASYNC_USE_PTHREAD
     #endif
@@ -62,6 +65,10 @@
 #if defined(MTMSG_ASYNC_USE_STDATOMIC)
     #include <stdint.h>
     #include <stdatomic.h>
+#endif
+#if defined(MTMSG_ASYNC_USE_STDTHREAD)
+    #include <sys/time.h>
+    #include <threads.h>
 #endif
 
 /* -------------------------------------------------------------------------------------------- */

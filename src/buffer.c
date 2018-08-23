@@ -300,21 +300,20 @@ static void MsgBuffer_free(MsgBuffer* b)
         async_mutex_destruct(&b->ownMutex);
     }
     else {
-        async_mutex_lock(b->sharedMutex);
         if (b->listener) {
             MsgListener* listener = b->listener;
 
+            async_mutex_lock(b->sharedMutex);
             removeFromListener(listener, b);
             async_mutex_notify(b->sharedMutex);
+            async_mutex_unlock(b->sharedMutex);
             
             if (atomic_dec(&listener->used) == 0) {
                 mtmsg_listener_free(listener);
             }
         }
-        mtmsg_membuf_free(&b->mem);
-        async_mutex_unlock(b->sharedMutex);
     }
-    
+    mtmsg_membuf_free(&b->mem);
     free(b);
 }
 

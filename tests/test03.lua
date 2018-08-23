@@ -1,3 +1,4 @@
+print("test03 starting...")
 local llthreads = require("llthreads2.ex")
 local mtmsg     = require("mtmsg")
 
@@ -13,7 +14,7 @@ local function f(x)
     for i = 1, 5000 do
         rslt = rslt + (math.sin(i * 1/x))^2
     end
-    return rslt
+    return math.floor(rslt * 100)
 end
 
 local threadList = {}
@@ -89,7 +90,7 @@ for i = 1, COUNT do
     local expected = expectedList[j]
     local diff = expected - rslt
 --    print("f("..j..") = " .. rslt)
-    assert(diff == 0)
+    assert(diff == 0, diff)
     expectedList[j] = nil
 end
 print(" --------------------------------- Time:", mtmsg.time() - startTime)

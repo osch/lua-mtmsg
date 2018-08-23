@@ -9,7 +9,7 @@ local function f(x)
     for i = 1, 5000 do
         rslt = rslt + (math.sin(i * 1/x))^2
     end
-    return rslt
+    return math.floor(rslt)
 end
 
 local threadList = {}

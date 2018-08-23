@@ -1,5 +1,4 @@
 local mtmsg     = require("mtmsg")
-local b         = mtmsg.newbuffer()
 
 local COUNT = 10000
 
@@ -8,14 +7,13 @@ local function f(x)
     for i = 1, 5000 do
         rslt = rslt + (math.sin(i * 1/x))^2
     end
-    b:nextmsg(math.random() * 0.00001)
     return rslt
 end
 
 local expectedList = {}
 for i = 1, COUNT do
     local rslt = f(i)
---    print("f("..i..") = " .. rslt)
+    print("f("..i..") = " .. rslt)
     expectedList[i] = rslt
 end
 

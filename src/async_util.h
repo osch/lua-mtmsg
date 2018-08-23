@@ -53,7 +53,7 @@ static inline int atomic_inc(AtomicCounter* value)
 #if defined(MTMSG_ASYNC_USE_WIN32)
     return InterlockedIncrement(value);
 #elif defined(MTMSG_ASYNC_USE_STDATOMIC)
-    return atomic_fetch_add(value, 1);
+    return atomic_fetch_add(value, 1) + 1;
 #elif defined(MTMSG_ASYNC_USE_GNU)
     return __sync_add_and_fetch(value, 1);
 #endif
@@ -64,7 +64,7 @@ static inline int atomic_dec(AtomicCounter* value)
 #if defined(MTMSG_ASYNC_USE_WIN32)
     return InterlockedDecrement(value);
 #elif defined(MTMSG_ASYNC_USE_STDATOMIC)
-    return atomic_fetch_sub(value, 1);
+    return atomic_fetch_sub(value, 1) - 1;
 #elif defined(MTMSG_ASYNC_USE_GNU)
     return __sync_sub_and_fetch(value, 1);
 #endif

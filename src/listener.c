@@ -38,6 +38,9 @@ static MsgListener* createNewListener()
     listener->used    = 1;
     async_mutex_init(&listener->listenerMutex);
 
+    if (firstListener) {
+        firstListener->prevListenerPtr = &listener->nextListener;
+    }
     listener->nextListener    = firstListener;
     listener->prevListenerPtr = &firstListener;
     firstListener             = listener;

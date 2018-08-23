@@ -101,7 +101,7 @@ static int handleClosingLuaState(lua_State* L)
     async_mutex_lock(mtmsg_global_lock);
     initCounter -= 1;
     if (initCounter == 0) {
-        
+
     }
     async_mutex_unlock(mtmsg_global_lock);
     return 0;

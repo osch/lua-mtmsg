@@ -132,6 +132,9 @@ static MsgBuffer* createNewBuffer(Mutex* sharedMutex)
         b->sharedMutex = sharedMutex;
     }
 
+    if (firstBuffer) {
+        firstBuffer->prevBufferPtr = &b->nextBuffer;
+    }
     b->nextBuffer    = firstBuffer;
     b->prevBufferPtr = &firstBuffer;
     firstBuffer      = b;
@@ -330,7 +333,6 @@ static int MsgBuffer_release(lua_State* L)
         if (atomic_dec(&b->used) == 0) {
             MsgBuffer_free(b);
         }
-        
         udata->buffer = NULL;
         
         async_mutex_unlock(mtmsg_global_lock);

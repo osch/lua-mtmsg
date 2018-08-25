@@ -66,6 +66,22 @@ static inline void mtmsg_buffer_remove_from_ready_list(MsgListener* listener, Ms
     b->prevReadyBuffer = NULL;
     b->nextReadyBuffer = NULL;
 }
+static inline bool mtmsg_is_on_ready_list(MsgListener* listener, MsgBuffer* b)
+{
+    return (b->prevReadyBuffer) || (listener->firstReadyBuffer == b);
+}
+static inline void mtmsg_buffer_add_to_ready_list(MsgListener* listener, MsgBuffer* b)
+{
+    if (listener->lastReadyBuffer) {
+        listener->lastReadyBuffer->nextReadyBuffer = b;
+        b->prevReadyBuffer = listener->lastReadyBuffer;
+        listener->lastReadyBuffer = b;
+    } else {
+        listener->firstReadyBuffer = b;
+        listener->lastReadyBuffer  = b;
+    }
+}
+
 
 
 #endif /* MTMSG_BUFFER_H */

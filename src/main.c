@@ -2,7 +2,7 @@
 #include "async_util.h"
 #include "buffer.h"
 #include "listener.h"
-
+#include "error.h"
 
 const char* const MTMSG_MODULE_NAME = "mtmsg";
 
@@ -74,7 +74,7 @@ again:
     if (mtmsg_abort_flag) {
         async_mutex_notify(mtmsg_global_lock);
         async_mutex_unlock(mtmsg_global_lock);
-        return luaL_error(L, "operation was aborted");
+        return mtmsg_ERROR_OPERATION_ABORTED(L);
     }
     lua_Number now = mtmsg_current_time_seconds();
     if (now < endTime) {
@@ -177,7 +177,8 @@ DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
     
     int n = lua_gettop(L);
     
-    int module     = ++n; lua_newtable(L);
+    int module      = ++n; lua_newtable(L);
+    int errorModule = ++n; lua_newtable(L);
 
     int bufferMeta = ++n; luaL_newmetatable(L, MTMSG_BUFFER_CLASS_NAME);
     int bufferClass= ++n; lua_newtable(L);
@@ -185,21 +186,32 @@ DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
     int listenerMeta = ++n; luaL_newmetatable(L, MTMSG_LISTENER_CLASS_NAME);
     int listenerClass= ++n; lua_newtable(L);
 
+    int errorMeta = ++n; luaL_newmetatable(L, MTMSG_ERROR_CLASS_NAME);
+    int errorClass= ++n; lua_newtable(L);
+
+
     lua_pushvalue(L, module);
         luaL_setfuncs(L, ModuleFunctions, 0);
-        
-        lua_pushvalue(L, bufferClass);
-        lua_setfield (L, bufferMeta, "__index");
-
-        lua_pushvalue(L, listenerClass);
-        lua_setfield (L, listenerMeta, "__index");
-
     lua_pop(L, 1);
+        
+    lua_pushvalue(L, errorModule);
+    lua_setfield(L, module, "error");
+
+    lua_pushvalue(L, bufferClass);
+    lua_setfield (L, bufferMeta, "__index");
+
+    lua_pushvalue(L, listenerClass);
+    lua_setfield (L, listenerMeta, "__index");
+
+    lua_pushvalue(L, errorClass);
+    lua_setfield (L, errorMeta, "__index");
+
 
     lua_checkstack(L, LUA_MINSTACK);
     
-    mtmsg_buffer_init_module  (L, module, bufferMeta,   bufferClass);
-    mtmsg_listener_init_module(L, module, listenerMeta, listenerClass);
+    mtmsg_buffer_init_module  (L, module,      bufferMeta,   bufferClass);
+    mtmsg_listener_init_module(L, module,      listenerMeta, listenerClass);
+    mtmsg_error_init_module   (L, errorModule, errorMeta,    errorClass);
     
     lua_settop(L, module);
     return 1;

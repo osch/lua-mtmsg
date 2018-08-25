@@ -34,6 +34,7 @@ ADD_LIBRARY (
 	src/buffer.c
 	src/listener.c
 	src/util.c
+	src/error.c
 	src/async_util.c
 	src/mtmsg_compat.c
 )

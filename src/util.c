@@ -89,3 +89,34 @@ int mtmsg_membuf_reserve(MemBuffer* b, size_t additionalLength)
     return 0;
 }
 
+void mtmsg_util_quote_lstring(lua_State* L, const char* s, size_t len)
+{
+    if (s) {
+        luaL_Buffer tmp;
+        luaL_buffinit(L, &tmp);
+        luaL_addchar(&tmp, '"');
+        int i;
+        for (i = 0; i < len; ++i) {
+            char c = s[i];
+            if (c == 0) {
+                luaL_addstring(&tmp, "\\0");
+            } else if (c == '"') {
+                luaL_addstring(&tmp, "\\\"");
+            } else if (c == '\\') {
+                luaL_addstring(&tmp, "\\\\");
+            } else {
+                luaL_addchar(&tmp, c);
+            }
+        }
+        luaL_addchar(&tmp, '"');
+        luaL_pushresult(&tmp);
+    } else {
+        lua_pushstring(L, "nil");
+    }
+}
+
+void mtmsg_util_quote_string(lua_State* L, const char* s)
+{
+    mtmsg_util_quote_lstring(L, s, (s != NULL) ? strlen(s) : 0);
+}
+

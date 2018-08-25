@@ -85,4 +85,9 @@ void mtmsg_membuf_free(MemBuffer* b);
  */
 int mtmsg_membuf_reserve(MemBuffer* b, size_t additionalLength);
 
+
+void mtmsg_util_quote_lstring(lua_State* L, const char* s, size_t len);
+
+void mtmsg_util_quote_string(lua_State* L, const char* s);
+
 #endif /* MTMSG_UTIL_H */

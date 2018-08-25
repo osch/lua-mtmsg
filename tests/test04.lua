@@ -1,7 +1,7 @@
 local llthreads = require("llthreads2.ex")
 local mtmsg     = require("mtmsg")
 
-local THREAD_COUNT = 40
+local THREAD_COUNT = 100
 
 local thread_code = function(...)
     local mtmsg = require("mtmsg")
@@ -19,6 +19,9 @@ local thread_code = function(...)
             --print("shouldExit " .. threadId)
             shouldExit = true
         elseif action == "task1" then
+            mtmsg.sleep(math.random() * 0.001)
+            do  local c = 0
+                for i = 1, 100 * math.random() do c = c + math.sin(c) end end
             local b = mtmsg.buffer(arg)
             b:addmsg(b:id())
             threadOutBuffer:addmsg("task1", threadId, taskId, b:id())
@@ -109,7 +112,7 @@ local tasks = {
             end
             collectgarbage()
             local ok, err = pcall(function() listener:nextmsg(0) end)
-            assert(not ok and err:match("listener has no buffers"), err)
+            assert(not ok and err == mtmsg.error.no_buffers)
         end
         
         return impl
@@ -142,9 +145,9 @@ while terminated < THREAD_COUNT do
         collectgarbage()
     end
     if terminating < THREAD_COUNT then
-        if r > 0.5 then
+        --if r > 0.5 then
             tasks.task1.trigger()
-        end
+        --end
         if r < 0.001 then
             while true do
                 local entry = nextEntry()

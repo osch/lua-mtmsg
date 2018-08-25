@@ -41,6 +41,7 @@ build = {
           "src/main.c",
           "src/buffer.c",
           "src/listener.c",
+          "src/error.c",
           "src/util.c",
           "src/async_util.c",
           "src/mtmsg_compat.c",

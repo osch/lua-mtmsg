@@ -53,6 +53,12 @@ before_test:
 
 test_script:
   - echo "Testing..."
+  - cd %APPVEYOR_BUILD_FOLDER%\examples
+  - lua example01.lua
+  - lua example02.lua
+  - lua example03.lua
+  - lua example04.lua
+  - lua example05.lua
   - cd %APPVEYOR_BUILD_FOLDER%\tests
   - lua test00.lua
   - lua test01.lua

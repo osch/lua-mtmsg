@@ -1,0 +1,27 @@
+  local llthreads = require("llthreads2.ex")
+  local mtmsg     = require("mtmsg")
+  local threadIn  = mtmsg.newbuffer()
+  local lst       = mtmsg.newlistener()
+  local threadOut = lst:newbuffer()
+  local thread    = llthreads.new(function(inId, outId)
+                                      local mtmsg     = require("mtmsg")
+                                      local threadIn  = mtmsg.buffer(inId)
+                                      local threadOut = mtmsg.buffer(outId)
+                                      threadOut:addmsg("started")
+                                      assert(threadIn:nextmsg() == "exit")
+                                      threadOut:addmsg("finished")
+                                  end,
+                                  threadIn:id(),
+                                  threadOut:id())
+  -- threadOut = nil -- not now!
+  -- collectgarbage()
+  thread:start()
+  assert(lst:nextmsg() == "started")
+  threadOut = nil -- now it's safe
+  collectgarbage()
+  threadIn:addmsg("exit")
+  assert(lst:nextmsg() == "finished")
+  assert(thread:join())
+  collectgarbage()
+  local _, err = pcall(function() lst:nextmsg() end)
+  assert(err == mtmsg.error.no_buffers)

@@ -49,8 +49,17 @@ do
     local ok, err = pcall(function() b:addmsg("m2") end)
     print("------ expected error")
     print(err)
+    print("------ name")
+    print(err:name())
+    assert("mtmsg.error.message_size" == err:name())
+    print("------ details")
+    print(err:details())
+    print("------ traceback")
+    print(err:traceback())
     print("---------------------")
     assert(err == mtmsg.error.message_size)
+    assert(err:name()..": "..err:details().."\n"..err:traceback() == err:message())
+    assert(tostring(err) == err:message())
 end
 do
     local l = mtmsg.newlistener()

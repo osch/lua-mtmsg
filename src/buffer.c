@@ -939,6 +939,10 @@ static int MsgBuffer_nonblock(lua_State* L)
         const char* qstring = mtmsg_buffer_tostring(L, b);
         return mtmsg_ERROR_OBJECT_CLOSED(L, qstring);
     }
+    if (b->aborted) {
+        async_mutex_unlock(b->sharedMutex);
+        return mtmsg_ERROR_OPERATION_ABORTED(L);
+    }
     
     udata->nonblock = newNonblock;
 

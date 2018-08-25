@@ -2,13 +2,13 @@
 
 const char* const MTMSG_ERROR_CLASS_NAME = "mtmsg.error";
 
-static const char* const ERROR_UNKNOWN_OBJECT    = "unknown_object";
-static const char* const ERROR_NO_BUFFERS        = "no_buffers";
-static const char* const ERROR_OBJECT_EXISTS     = "object_exists";
-static const char* const ERROR_OBJECT_CLOSED     = "object_closed";
-static const char* const ERROR_OPERATION_ABORTED = "operation_aborted";
-static const char* const ERROR_MESSAGE_SIZE      = "message_size";
-static const char* const ERROR_OUT_OF_MEMORY     = "out_of_memory";
+static const char* const MTMSG_ERROR_UNKNOWN_OBJECT    = "unknown_object";
+static const char* const MTMSG_ERROR_NO_BUFFERS        = "no_buffers";
+static const char* const MTMSG_ERROR_OBJECT_EXISTS     = "object_exists";
+static const char* const MTMSG_ERROR_OBJECT_CLOSED     = "object_closed";
+static const char* const MTMSG_ERROR_OPERATION_ABORTED = "operation_aborted";
+static const char* const MTMSG_ERROR_MESSAGE_SIZE      = "message_size";
+static const char* const MTMSG_ERROR_OUT_OF_MEMORY     = "out_of_memory";
 
 
 typedef struct Error {
@@ -69,54 +69,54 @@ int mtmsg_ERROR_UNKNOWN_OBJECT_buffer_name(lua_State* L, const char* bufferName,
 {
     mtmsg_util_quote_lstring(L, bufferName, nameLength);
     lua_pushfstring(L, ": buffer name %s", lua_tostring(L, -1));
-    return throwErrorMessage(L, ERROR_UNKNOWN_OBJECT);
+    return throwErrorMessage(L, MTMSG_ERROR_UNKNOWN_OBJECT);
 }
 
 int mtmsg_ERROR_UNKNOWN_OBJECT_buffer_id(lua_State* L, lua_Integer id)
 {
     lua_pushfstring(L, ": buffer id %d", (int)id);
-    return throwErrorMessage(L, ERROR_UNKNOWN_OBJECT);
+    return throwErrorMessage(L, MTMSG_ERROR_UNKNOWN_OBJECT);
 }
 
 int mtmsg_ERROR_UNKNOWN_OBJECT_listener_name(lua_State* L, const char* listenerName, size_t nameLength)
 {
     mtmsg_util_quote_lstring(L, listenerName, nameLength);
     lua_pushfstring(L, ": listener name %s", lua_tostring(L, -1));
-    return throwErrorMessage(L, ERROR_UNKNOWN_OBJECT);
+    return throwErrorMessage(L, MTMSG_ERROR_UNKNOWN_OBJECT);
 }
 
 int mtmsg_ERROR_UNKNOWN_OBJECT_listener_id(lua_State* L, lua_Integer id)
 {
     lua_pushfstring(L, ": listener id %d", (int)id);
-    return throwErrorMessage(L, ERROR_UNKNOWN_OBJECT);
+    return throwErrorMessage(L, MTMSG_ERROR_UNKNOWN_OBJECT);
 }
 
 int mtmsg_ERROR_NO_BUFFERS(lua_State* L, const char* objectString)
 {
     lua_pushfstring(L, ": %s", objectString);
-    return throwErrorMessage(L, ERROR_NO_BUFFERS);
+    return throwErrorMessage(L, MTMSG_ERROR_NO_BUFFERS);
 }
 
 int mtmsg_ERROR_OBJECT_EXISTS(lua_State* L, const char* objectString)
 {
     lua_pushfstring(L, ": %s", objectString);
-    return throwErrorMessage(L, ERROR_OBJECT_EXISTS);
+    return throwErrorMessage(L, MTMSG_ERROR_OBJECT_EXISTS);
 }
 
 int mtmsg_ERROR_OBJECT_CLOSED(lua_State* L, const char* objectString)
 {
     lua_pushfstring(L, ": %s", objectString);
-    return throwErrorMessage(L, ERROR_OBJECT_CLOSED);
+    return throwErrorMessage(L, MTMSG_ERROR_OBJECT_CLOSED);
 }
 
 int mtmsg_ERROR_OPERATION_ABORTED(lua_State* L)
 {
-    return throwError(L, ERROR_OPERATION_ABORTED);
+    return throwError(L, MTMSG_ERROR_OPERATION_ABORTED);
 }
 
 int mtmsg_ERROR_OUT_OF_MEMORY(lua_State* L)
 {
-    return throwError(L, ERROR_OUT_OF_MEMORY);
+    return throwError(L, MTMSG_ERROR_OUT_OF_MEMORY);
 }
 
 int mtmsg_ERROR_OUT_OF_MEMORY_bytes(lua_State* L, size_t bytes)
@@ -126,7 +126,7 @@ int mtmsg_ERROR_OUT_OF_MEMORY_bytes(lua_State* L, size_t bytes)
 #else
     lua_pushfstring(L, ": failed to allocate %f bytes", (lua_Number)bytes);
 #endif
-    return throwErrorMessage(L, ERROR_OUT_OF_MEMORY);
+    return throwErrorMessage(L, MTMSG_ERROR_OUT_OF_MEMORY);
 }
 
 int mtmsg_ERROR_MESSAGE_SIZE_bytes(lua_State* L, size_t bytes, size_t limit, const char* objectString)
@@ -142,7 +142,7 @@ int mtmsg_ERROR_MESSAGE_SIZE_bytes(lua_State* L, size_t bytes, size_t limit, con
                        (lua_Number)limit,
                        objectString);
 #endif
-    return throwErrorMessage(L, ERROR_MESSAGE_SIZE);
+    return throwErrorMessage(L, MTMSG_ERROR_MESSAGE_SIZE);
 }
 
 
@@ -236,13 +236,13 @@ static void publishError(lua_State* L, int module, const char* errorName)
 
 int mtmsg_error_init_module(lua_State* L, int errorModule, int errorMeta, int errorClass)
 {
-    publishError(L, errorModule, ERROR_UNKNOWN_OBJECT);
-    publishError(L, errorModule, ERROR_NO_BUFFERS);
-    publishError(L, errorModule, ERROR_OBJECT_EXISTS);
-    publishError(L, errorModule, ERROR_OBJECT_CLOSED);
-    publishError(L, errorModule, ERROR_OPERATION_ABORTED);
-    publishError(L, errorModule, ERROR_MESSAGE_SIZE);
-    publishError(L, errorModule, ERROR_OUT_OF_MEMORY);
+    publishError(L, errorModule, MTMSG_ERROR_UNKNOWN_OBJECT);
+    publishError(L, errorModule, MTMSG_ERROR_NO_BUFFERS);
+    publishError(L, errorModule, MTMSG_ERROR_OBJECT_EXISTS);
+    publishError(L, errorModule, MTMSG_ERROR_OBJECT_CLOSED);
+    publishError(L, errorModule, MTMSG_ERROR_OPERATION_ABORTED);
+    publishError(L, errorModule, MTMSG_ERROR_MESSAGE_SIZE);
+    publishError(L, errorModule, MTMSG_ERROR_OUT_OF_MEMORY);
     
     lua_pushvalue(L, errorMeta);
         luaL_setfuncs(L, ErrorMetaMethods, 0);

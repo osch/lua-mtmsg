@@ -457,6 +457,61 @@ static int MsgListener_isNonblock(lua_State* L)
     return 1;
 }
 
+static int MsgListener_clear(lua_State* L)
+{
+    int arg = 1;
+    ListenerUserData* udata    = luaL_checkudata(L, arg++, MTMSG_LISTENER_CLASS_NAME);
+    MsgListener*      listener = udata->listener;
+
+    if (udata->nonblock) {
+        if (!async_mutex_trylock(&listener->listenerMutex)) {
+            lua_pushboolean(L, false);
+            return 1;
+        }
+    } else {
+        async_mutex_lock(&listener->listenerMutex);
+    }
+
+    if (listener->closed) {
+        async_mutex_unlock(&listener->listenerMutex);
+        const char* listenerString = listenerToLuaString(L, listener);
+        return mtmsg_ERROR_OBJECT_CLOSED(L, listenerString);
+    }
+
+    MsgBuffer* b = listener->firstListenerBuffer;
+    while (b != NULL) {
+        b->mem.bufferLength = 0;
+        mtmsg_buffer_remove_from_ready_list(listener, b);
+        b = b->nextListenerBuffer;
+    }
+    async_mutex_unlock(&listener->listenerMutex);
+
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+static int MsgListener_close(lua_State* L)
+{
+    int arg = 1;
+    ListenerUserData* udata    = luaL_checkudata(L, arg++, MTMSG_LISTENER_CLASS_NAME);
+    MsgListener*      listener = udata->listener;
+
+    async_mutex_lock(&listener->listenerMutex);
+
+    MsgBuffer* b = listener->firstListenerBuffer;
+    while (b != NULL) {
+        b->closed = true;
+        mtmsg_buffer_remove_from_ready_list(listener, b);
+        mtmsg_membuf_free(&b->mem);
+        b = b->nextListenerBuffer;
+    }
+    listener->closed = true;
+    async_mutex_notify(&listener->listenerMutex);
+    async_mutex_unlock(&listener->listenerMutex);
+
+    return 0;
+}
+
 static int MsgListener_abort(lua_State* L)
 {
     int arg = 1;
@@ -473,6 +528,19 @@ static int MsgListener_abort(lua_State* L)
 
     async_mutex_lock(&listener->listenerMutex);
     listener->aborted = abortFlag;
+
+    MsgBuffer* b = listener->firstListenerBuffer;
+    while (b != NULL) {
+        if (b->aborted != abortFlag) {
+            b->aborted = abortFlag;
+            if (abortFlag) {
+                mtmsg_buffer_remove_from_ready_list(listener, b);
+            } else if (b->mem.bufferLength > 0) {
+                mtmsg_buffer_add_to_ready_list(listener, b);
+            }
+        }
+        b = b->nextListenerBuffer;
+    }
     if (abortFlag) {
         async_mutex_notify(&listener->listenerMutex);
     }
@@ -499,8 +567,10 @@ static const luaL_Reg MsgListenerMethods[] =
     { "name",         MsgListener_name         },
     { "newbuffer",    MsgListener_newBuffer    },
     { "nextmsg",      MsgListener_nextMsg      },
+    { "clear",        MsgListener_clear        },
     { "nonblock",     MsgListener_nonblock     },
     { "isnonblock",   MsgListener_isNonblock   },
+    { "close",        MsgListener_close        },
     { "abort",        MsgListener_abort        },
     { "isabort",      MsgListener_isAbort      },
     { NULL,           NULL } /* sentinel */

@@ -265,10 +265,6 @@ static void removeFromListener(MsgListener* listener, MsgBuffer* b)
 
 static void MsgBuffer_free(MsgBuffer* b)
 {
-    if (b->bufferName) {
-        free(b->bufferName);
-    }
-
     *b->prevBufferPtr = b->nextBuffer;
     if (b->nextBuffer) {
         b->nextBuffer->prevBufferPtr = b->prevBufferPtr;
@@ -288,6 +284,9 @@ static void MsgBuffer_free(MsgBuffer* b)
                 mtmsg_listener_free(listener);
             }
         }
+    }
+    if (b->bufferName) {
+        free(b->bufferName);
     }
     mtmsg_membuf_free(&b->mem);
     free(b);
@@ -321,12 +320,13 @@ static int MsgBuffer_close(lua_State* L)
 
     b->closed = true;
     if (b->listener) {
-        removeFromListener(b->listener, b);
+        mtmsg_buffer_remove_from_ready_list(b->listener, b);
     }
     mtmsg_membuf_free(&b->mem);
+    async_mutex_notify(b->sharedMutex);
     async_mutex_unlock(b->sharedMutex);
-    lua_pushboolean(L, true);
-    return 1;
+
+    return 0;
 }
 
 

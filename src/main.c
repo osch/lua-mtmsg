@@ -145,6 +145,10 @@ DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
                 for (i = 0; i < 2 * sizeof(char*); ++i) {
                     c ^= ((int)(((char*)&ptr)[(i + 1) % sizeof(char*)]) & 0xff) << ((i % (sizeof(AtomicCounter) - 1))*8);
                 }
+                lua_Number t = mtmsg_current_time_seconds();
+                for (i = 0; i < 2 * sizeof(lua_Number); ++i) {
+                    c ^= ((int)(((char*)&t)[(i + 1) % sizeof(lua_Number)]) & 0xff) << ((i % (sizeof(AtomicCounter) - 1))*8);
+                }
             }
             mtmsg_id_counter = c;
             initialized = true;

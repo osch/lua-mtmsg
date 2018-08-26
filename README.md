@@ -92,6 +92,7 @@ assert(lst:nextmsg(0) == nil)
        * listener:nextmsg()
        * listener:nonblock()
        * listener:isnonblock()
+       * listener:clear()
        * listener:close()
        * listener:abort()
        * listener:isabort()
@@ -258,6 +259,12 @@ assert(lst:nextmsg(0) == nil)
 
   Removes all messages from the buffer.
 
+  Returns *true* if the buffer could be cleared.
+  
+  Returns *false* if *buffer:isnonblock() == true* and the buffer is
+  concurrently accessed from another thread. 
+  
+
   Possible errors: *mtmsg.error.object_closed*
 
 
@@ -392,18 +399,33 @@ assert(lst:nextmsg(0) == nil)
 
   Returns *true* if *listener:nonblock()* or *listener:nonblock(true)* was invoked.
 
+* **`listener:clear()`**
+
+  Removes all messages from all connected buffers.
+
+  Returns *true* if all buffers could be cleared.
+  
+  Returns *false* if *listener:isnonblock() == true* and the listener or one of the 
+  buffers is concurrently accessed from another thread. 
+  
+  Possible errors: *mtmsg.error.object_closed*
+
+
 * **`listener:close()`**
 
-  TODO
+  Closes the listener and all connected buffers and frees the memory. Every 
+  operation from any referencing object raises a *mtmsg.error.object_closed*. 
+  A closed listener cannot be reactivated.
+
 
 * **`listener:abort([flag])`**
 
-  Aborts operation on the underlying listener.
+  Aborts operation on the underlying listener and all connected buffers.
   
-    * *flag* - optional boolean. If *true* or not given the listener is aborted, 
-               i.e. a *mtmsg.error.operation_aborted* is raised. 
-               If *false*, abortion is canceled, i.e. the listener can be used 
-               again.
+    * *flag* - optional boolean. If *true* or not given the listener and connected buffers 
+               are aborted, i.e. a *mtmsg.error.operation_aborted* is raised. 
+               If *false*, abortion is canceled, i.e. the listener and 
+               all connected buffers can be used again.
 
 
 * **`listener:isabort()`**

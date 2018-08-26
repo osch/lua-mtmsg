@@ -65,6 +65,7 @@ test_script:
   - lua test02.lua
   - lua test03.lua
   - lua test04.lua
+  - lua test05.lua
 
 after_test:
   # deploy

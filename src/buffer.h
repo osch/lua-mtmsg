@@ -16,7 +16,6 @@ typedef struct MsgBuffer {
     bool               closed;
     Mutex*             sharedMutex;
     Mutex              ownMutex;
-    size_t             initialTmpBufferSize;
     MemBuffer          mem;
     
     struct MsgListener* listener;          
@@ -33,7 +32,6 @@ typedef struct MsgBuffer {
 typedef struct BufferUserData {
     MsgBuffer*         buffer;
     bool               nonblock;
-    MemBuffer          tmp;
 } BufferUserData;
 
 struct ListenerUserData;
@@ -42,8 +40,14 @@ int mtmsg_buffer_new(lua_State* L, struct ListenerUserData* listenerUdata, int a
 
 const char* mtmsg_buffer_tostring(lua_State* L, MsgBuffer* q);
 
-size_t mtmsg_buffer_getsize(const char* buffer);
-int mtmsg_buffer_push_msg(lua_State* L, const char* buffer, size_t* bufferSize);
+typedef struct PushMsgPar {
+    const char* buffer;
+    size_t      msgLength;
+    int         argCount;
+} PushMsgPar;
+
+/*size_t mtmsg_buffer_getsize(const char* buffer);*/
+int mtmsg_buffer_push_msg(lua_State* L);
 
 int mtmsg_buffer_init_module(lua_State* L, int module, int bufferMeta, int bufferClass);
 

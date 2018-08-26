@@ -115,20 +115,17 @@ assert(lst:nextmsg(0) == nil)
 
 ### Module Functions
 
-* **`mtmsg.newbuffer([name,][size1[,size2[,grow]]]`**
+* **`mtmsg.newbuffer([name,][size[,grow]])`**
 
   Creates a new buffer and returns a lua object for referencing the
   created buffer.
 
     * *name*  - optional string, the name of the new buffer,
-    * *size1* - optional integer, initial size in bytes for internal memory 
-                chunks holding one message (defaults to *128*),
-    * *size2* - optional integer, initial size in bytes for the buffer that
-                holds all messages for this buffer (defaults to *1024*),
-                must be greater or equal than *size1*,
+    * *size*  - optional integer, initial size in bytes for the buffer that
+                holds all messages for this buffer (defaults to *1024*).
     * *grow*  - optional float, the factor how fast buffer memory grows
                 if more data has to be buffered. If *0*, the used
-                memory is fixed by the initially given sizes. If *<=1* the 
+                memory is fixed by the initially given size. If *<=1* the 
                 buffer grows only by the needed bytes (default value is *2*,
                 i.e. the size doubles if buffer memory needs to grow).
   
@@ -338,7 +335,7 @@ assert(lst:nextmsg(0) == nil)
   Returns the listener's name that was given to *mtmsg.newlistener()*.
 
 
-* **`listener:newbuffer([name,][size1[,size2[,grow]]]`**
+* **`listener:newbuffer([name,][size[,grow]])`**
 
   Creates a new buffer that is connected to the listener and returns a lua object 
   for referencing the created buffer.
@@ -458,8 +455,8 @@ assert(lst:nextmsg(0) == nil)
 
 * **`mtmsg.error.message_size`**
   
-  The size of one message exceeds the limit that was given as parameter *size1*
-  in *mtmsg.newbuffer()* or *listener:newbuffer()* and a grow factor *0* was
+  The size of one message exceeds the limit that was given in
+  *mtmsg.newbuffer()* or *listener:newbuffer()* and a grow factor *0* was
   specified to prevent buffer growing.
   
 * **`mtmsg.error.no_buffers`**

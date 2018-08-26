@@ -163,7 +163,6 @@ static int Mtmsg_listener(lua_State* L)
     ListenerUserData* userData = lua_newuserdata(L, sizeof(ListenerUserData)); /* create before lock */
     memset(userData, 0, sizeof(ListenerUserData));
     luaL_setmetatable(L, MTMSG_LISTENER_CLASS_NAME);
-    mtmsg_membuf_init(&userData->tmp, 0, 1);
     
     /* Lock */
     
@@ -216,7 +215,6 @@ static int Mtmsg_newListener(lua_State* L)
     ListenerUserData* userData = lua_newuserdata(L, sizeof(ListenerUserData)); /* create before lock */
     memset(userData, 0, sizeof(ListenerUserData));
     luaL_setmetatable(L, MTMSG_LISTENER_CLASS_NAME);
-    mtmsg_membuf_init(&userData->tmp, 0, 1);
 
     async_mutex_lock(mtmsg_global_lock);
 
@@ -268,8 +266,6 @@ static int MsgListener_release(lua_State* L)
 {
     ListenerUserData* udata    = luaL_checkudata(L, 1, MTMSG_LISTENER_CLASS_NAME);
     MsgListener*      listener = udata->listener;
-
-    mtmsg_membuf_free(&udata->tmp);
 
     if (listener) {
         async_mutex_lock(mtmsg_global_lock);
@@ -339,35 +335,31 @@ again:
         while (b != NULL) {
             if (b->mem.bufferLength > 0) 
             {
-                size_t msgLength = mtmsg_buffer_getsize(b->mem.bufferStart);
-                if (msgLength > listenerUdata->tmp.bufferCapacity) {
-                    int rc = mtmsg_membuf_reserve(&listenerUdata->tmp, msgLength);
-                    if (rc != 0) {
-                        async_mutex_unlock(&listener->listenerMutex);
-                        return mtmsg_ERROR_OUT_OF_MEMORY_bytes(L, msgLength);
-                    }
+                PushMsgPar par; par.buffer    = b->mem.bufferStart;
+                                par.msgLength = 0;
+                                par.argCount  = 0;
+                lua_pushcfunction(L, mtmsg_buffer_push_msg);
+                lua_pushlightuserdata(L, &par);
+                int rc = lua_pcall(L, 1, LUA_MULTRET, 0);
+                if (rc != LUA_OK) {
+                    async_mutex_unlock(&listener->listenerMutex);
+                    return lua_error(L);
                 }
-                memcpy(listenerUdata->tmp.bufferStart, b->mem.bufferStart, msgLength);
-                b->mem.bufferLength -= msgLength;
+                b->mem.bufferLength -= par.msgLength;
                 {
                     mtmsg_buffer_remove_from_ready_list(listener, b);
                 }
                 if (b->mem.bufferLength == 0) {
                     b->mem.bufferStart = b->mem.bufferData;
                 } else {
-                    b->mem.bufferStart  += msgLength;
+                    b->mem.bufferStart  += par.msgLength;
                     mtmsg_buffer_add_to_ready_list(listener, b);
                 }
                 if (listener->firstReadyBuffer) {
                     async_mutex_notify(&listener->listenerMutex);
                 }
                 async_mutex_unlock(&listener->listenerMutex);
-                int rsltCount = 0;
-                if (msgLength > 0) {
-                    size_t msgLength2 = 0;
-                    rsltCount = mtmsg_buffer_push_msg(L, listenerUdata->tmp.bufferStart, &msgLength2);
-                }
-                return rsltCount;
+                return par.argCount;
             }
             else
             {

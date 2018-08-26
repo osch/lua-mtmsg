@@ -27,7 +27,6 @@ typedef struct MsgListener {
 typedef struct ListenerUserData {
     MsgListener*       listener;
     bool               nonblock;
-    MemBuffer          tmp;
 } ListenerUserData;
 
 

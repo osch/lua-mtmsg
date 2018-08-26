@@ -44,8 +44,8 @@ do
 end
 collectgarbage()
 do
-    local b = mtmsg.newbuffer("hugo", 4, 6, 0)
-    b:addmsg("1")
+    local b = mtmsg.newbuffer("hugo", 4, 0)
+    assert(b:addmsg("1"))
     local ok, err = pcall(function() b:addmsg("m2") end)
     print("------ expected error")
     print(err)
@@ -60,6 +60,9 @@ do
     assert(err == mtmsg.error.message_size)
     assert(err:name()..": "..err:details().."\n"..err:traceback() == err:message())
     assert(tostring(err) == err:message())
+    assert(not b:addmsg("2"))
+    assert(b:nextmsg() == "1")
+    assert(b:addmsg("2"))
 end
 do
     local l = mtmsg.newlistener()

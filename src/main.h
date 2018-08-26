@@ -2,7 +2,6 @@
 #define MTMSG_MAIN_H
 
 #include "util.h"
-#include "async_util.h"
 
 extern Mutex*        mtmsg_global_lock;
 extern AtomicCounter mtmsg_id_counter;

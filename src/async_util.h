@@ -1,7 +1,7 @@
+#include "util.h"
+
 #ifndef MTMSG_ASYNC_UTIL_H
 #define MTMSG_ASYNC_UTIL_H
-
-#include "async_defines.h"
 
 /* -------------------------------------------------------------------------------------------- */
 

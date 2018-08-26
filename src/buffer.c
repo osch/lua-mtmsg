@@ -1,5 +1,4 @@
 #include "util.h"
-#include "async_util.h"
 #include "buffer.h"
 #include "listener.h"
 #include "main.h"

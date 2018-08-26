@@ -2,7 +2,6 @@
 #define MTMSG_BUFFER_H
 
 #include "util.h"
-#include "async_util.h"
 #include "listener.h"
 
 extern const char* const MTMSG_BUFFER_CLASS_NAME;

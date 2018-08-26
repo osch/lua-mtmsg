@@ -1,7 +1,4 @@
-#include "async_util.h" /* must be included first, because it might define _XOPEN_SOURCE */
-
-#include <stdlib.h>
-#include <stdio.h>
+#include "util.h"
 
 bool async_util_abort(int rc, int line)
 {

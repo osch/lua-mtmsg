@@ -2,7 +2,6 @@
 #define MTMSG_LISTENER_H
 
 #include "util.h"
-#include "async_util.h"
 
 extern const char* const MTMSG_LISTENER_CLASS_NAME;
 

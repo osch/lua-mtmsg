@@ -1,8 +1,9 @@
 package = "mtmsg"
 version = "0.1.0-1"
+local versionNumber = version:gsub("^(.*)-.-$", "%1")
 source = {
-  url = "https://github.com/osch/lua-mtmsg/archive/v0.1.0.zip",
-  dir = "lua-mtmsg-master",
+  url = "https://github.com/osch/lua-mtmsg/archive/v"..versionNumber..".zip",
+  dir = "lua-mtmsg-"..versionNumber,
 }
 description = {
   summary = "Low-level multi-threading message buffers",
@@ -46,7 +47,7 @@ build = {
           "src/async_util.c",
           "src/mtmsg_compat.c",
       },
-      defines = { "MTMSG_VERSION="..version:gsub("^(.*)-.-$", "%1") },
+      defines = { "MTMSG_VERSION="..versionNumber },
     },
   }
 }

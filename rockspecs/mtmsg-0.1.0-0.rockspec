@@ -1,7 +1,7 @@
 package = "mtmsg"
-version = "scm-0"
+version = "0.1.0-0"
 source = {
-  url = "https://github.com/osch/lua-mtmsg/archive/master.zip",
+  url = "https://github.com/osch/lua-mtmsg/archive/v0.1.0.zip",
   dir = "lua-mtmsg-master",
 }
 description = {

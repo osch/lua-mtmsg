@@ -21,7 +21,7 @@ MAKE_FLAGS = --no-print-directory
 CMAKE       = cmake
 CMAKE_FLAGS = 
 
-C_FLAGS             = -Wall -pthread
+C_FLAGS             = -Wall -pthread -DMTMSG_VERSION=scm-`date +"%Y-%m-%d-%H%M%S"`
 
 SHARED_LINKER_FLAGS = -pthread
 

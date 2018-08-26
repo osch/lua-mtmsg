@@ -4,6 +4,14 @@
 #include "listener.h"
 #include "error.h"
 
+#ifndef MTMSG_VERSION
+    #error MTMSG_VERSION is not defined
+#endif 
+
+#define MTMSG_STRINGIFY(x) #x
+#define MTMSG_TOSTRING(x) MTMSG_STRINGIFY(x)
+#define MTMSG_VERSION_STRING MTMSG_TOSTRING(MTMSG_VERSION)
+
 const char* const MTMSG_MODULE_NAME = "mtmsg";
 
 static AtomicPtr atomic_lock_holder = 0;
@@ -197,7 +205,10 @@ DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
     lua_pushvalue(L, module);
         luaL_setfuncs(L, ModuleFunctions, 0);
     lua_pop(L, 1);
-        
+    
+    lua_pushliteral(L, MTMSG_VERSION_STRING);
+    lua_setfield(L, module, "_VERSION");
+    
     lua_pushvalue(L, errorModule);
     lua_setfield(L, module, "error");
 

@@ -73,6 +73,7 @@ assert(lst:nextmsg(0) == nil)
        * mtmsg.isabort()
        * mtmsg.time()
        * mtmsg.sleep()
+       * mtmsg.type()
    * [Buffer Methods](#buffer-methods)
        * buffer:id()
        * buffer:name()
@@ -207,6 +208,19 @@ assert(lst:nextmsg(0) == nil)
 
   Possible errors: *mtmsg.error.operation_aborted*
   
+* **`mtmsg.type(arg)`**
+
+  Returns the type of *arg* as string. Same as *type(arg)* for builtin types.
+  For *userdata* objects it tries to determine the type from the *__name* field in 
+  the metatable and checks if the metatable can be found in the lua registry for this key
+  as created by [luaL_newmetatable](https://www.lua.org/manual/5.3/manual.html#luaL_newmetatable).
+
+  Returns *"userdata"* for userdata where the *__name* field in the metatable is missing
+  or does not have a corresponding entry in the lua registry.
+  
+  Returns *"mtmsg.buffer"*, *"mtmsg.listener"* or *"mtmsg.error"* if the arg is one
+  of the userdata types provided by the mtmsg package.
+
 
 <!-- ---------------------------------------------------------------------------------------- -->
 

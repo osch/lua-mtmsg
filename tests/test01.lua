@@ -7,6 +7,10 @@ print(mtmsg.newbuffer())
 print(mtmsg.newbuffer())
 local q=mtmsg.buffer("xx")
 print(q)
+assert(getmetatable(q) == "mtmsg.buffer")
+assert(mtmsg.type(q) == "mtmsg.buffer")
+assert(mtmsg.type("") == "string")
+assert(mtmsg.type(mtmsg) == "table")
 collectgarbage();
 print("----------------")
 q = nil
@@ -34,6 +38,8 @@ do
     local b = mtmsg.newbuffer("hugo")
     local ok, err = pcall(function() mtmsg.newbuffer("hugo") end)
     assert(err == mtmsg.error.object_exists)
+    assert(getmetatable(err) == "mtmsg.error")
+    assert(mtmsg.type(err) == "mtmsg.error")
     b:addmsg("m1")
     b:close()
     local ok, err = pcall(function() b:addmsg("m2") end)
@@ -66,6 +72,8 @@ do
 end
 do
     local l = mtmsg.newlistener()
+    assert(getmetatable(l) == "mtmsg.listener")
+    assert(mtmsg.type(l) == "mtmsg.listener")
     local b = l:newbuffer()
     l:nextmsg(0)
     b = nil

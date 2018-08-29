@@ -604,6 +604,8 @@ int mtmsg_listener_init_module(lua_State* L, int module, int listenerMeta, int l
     
     lua_pop(L, 3);
 
+    lua_pushstring(L, MTMSG_LISTENER_CLASS_NAME);
+    lua_setfield(L, listenerMeta, "__metatable");
+    
     return 0;
 }
-

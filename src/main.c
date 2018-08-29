@@ -93,6 +93,26 @@ again:
     return 0;
 }
 
+static int Mtmsg_type(lua_State* L)
+{
+    luaL_checkany(L, 1);
+    int tp = lua_type(L, 1);
+    if (tp == LUA_TUSERDATA) {
+        if (lua_getmetatable(L, 1)) {
+            if (lua_getfield(L, -1, "__name") == LUA_TSTRING) {
+                lua_pushvalue(L, -1);
+                if (lua_gettable(L, LUA_REGISTRYINDEX) == LUA_TTABLE) {
+                    if (lua_rawequal(L, -3, -1)) {
+                        lua_pop(L, 1);
+                        return 1;
+                    }
+                }
+            }
+        }
+    }
+    lua_pushstring(L, lua_typename(L, tp));
+    return 1;
+}
 
 static const luaL_Reg ModuleFunctions[] = 
 {
@@ -100,6 +120,7 @@ static const luaL_Reg ModuleFunctions[] =
     { "abort",         Mtmsg_abort        },
     { "isabort",       Mtmsg_isAbort      },
     { "sleep",         Mtmsg_sleep        },
+    { "type",          Mtmsg_type         },
     { NULL,            NULL } /* sentinel */
 };
 
@@ -117,12 +138,7 @@ static int handleClosingLuaState(lua_State* L)
 
 DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
 {
-#if LUA_VERSION_NUM >= 502
-    int luaVersion = (int)*lua_version(L);
-    if (luaVersion != LUA_VERSION_NUM) {
-        return luaL_error(L, "lua version mismatch: mtmsg was compiled for %d, but current version is %d", LUA_VERSION_NUM, luaVersion);
-    }
-#endif
+    luaL_checkversion(L); /* does nothing if compiled for Lua 5.1 */
 
     /* ---------------------------------------- */
 

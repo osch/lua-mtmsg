@@ -993,6 +993,9 @@ int mtmsg_buffer_init_module(lua_State* L, int module, int bufferMeta, int buffe
     
     lua_pop(L, 3);
 
+    lua_pushstring(L, MTMSG_BUFFER_CLASS_NAME);
+    lua_setfield(L, bufferMeta, "__metatable");
+    
     return 0;
 }
 

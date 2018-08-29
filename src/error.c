@@ -17,7 +17,7 @@ typedef struct Error {
     int         traceback;
 } Error;
 
-// pops message from stack
+/* pops message from stack */
 static void pushErrorClass(lua_State* L, const char* name)
 {
     Error* e = lua_newuserdata(L, sizeof(Error));
@@ -47,7 +47,7 @@ static void pushErrorMessage(lua_State* L, const char* name, int details)
     luaL_setmetatable(L, MTMSG_ERROR_CLASS_NAME);
 }
 
-// error message details must be on top of stack
+/* error message details must be on top of stack */
 static int throwErrorMessage(lua_State* L, const char* errorName)
 {
     int messageDetails = lua_gettop(L);
@@ -253,6 +253,13 @@ static const luaL_Reg ErrorMetaMethods[] =
     { NULL,       NULL } /* sentinel */
 };
 
+static const luaL_Reg ModuleFunctions[] = 
+{
+    { NULL,        NULL } /* sentinel */
+};
+
+
+
 static void publishError(lua_State* L, int module, const char* errorName)
 {
     pushErrorClass(L, errorName);
@@ -274,9 +281,12 @@ int mtmsg_error_init_module(lua_State* L, int errorModule, int errorMeta, int er
 
         lua_pushvalue(L, errorClass);
             luaL_setfuncs(L, ErrorMethods, 0);
-    
+        
     lua_pop(L, 2);
 
+    lua_pushstring(L, MTMSG_ERROR_CLASS_NAME);
+    lua_setfield(L, errorMeta, "__metatable");
+    
     return 0;
 }
 

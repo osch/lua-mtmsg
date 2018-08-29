@@ -1,7 +1,10 @@
 local mtmsg     = require("mtmsg")
 local startTime = mtmsg.time()
-
-print(mtmsg.newbuffer("xx"))
+print("test01 started")
+print("mtmsg._VERSION", mtmsg._VERSION)
+print("mtmsg._INFO", mtmsg._INFO)
+q0 = mtmsg.newbuffer("xx")
+print(q0)
 print(mtmsg.newbuffer())
 print(mtmsg.newbuffer())
 print(mtmsg.newbuffer())

@@ -27,10 +27,10 @@
 
     #if defined(WIN32) || defined(_WIN32)
         #define MTMSG_ASYNC_USE_WIN32
-    #elif __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
-        #define MTMSG_ASYNC_USE_STDATOMIC
     #elif defined(__GNUC__)
         #define MTMSG_ASYNC_USE_GNU
+    #elif __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
+        #define MTMSG_ASYNC_USE_STDATOMIC
     #else
         #error "MTMSG_ASYNC: unknown platform"
     #endif
@@ -38,12 +38,18 @@
 
 /* -------------------------------------------------------------------------------------------- */
 
+#if defined(__unix__) || defined(__unix) || (defined (__APPLE__) && defined (__MACH__))
+    #include <unistd.h>
+#endif
+
 #if    !defined(MTMSG_ASYNC_USE_WINTHREAD) \
     && !defined(MTMSG_ASYNC_USE_PTHREAD) \
     && !defined(MTMSG_ASYNC_USE_STDTHREAD)
     
     #ifdef MTMSG_ASYNC_USE_WIN32
         #define MTMSG_ASYNC_USE_WINTHREAD
+    #elif _XOPEN_VERSION >= 600
+        #define MTMSG_ASYNC_USE_PTHREAD
     #elif __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_THREADS__)
         #define MTMSG_ASYNC_USE_STDTHREAD
     #else

@@ -253,12 +253,6 @@ static const luaL_Reg ErrorMetaMethods[] =
     { NULL,       NULL } /* sentinel */
 };
 
-static const luaL_Reg ModuleFunctions[] = 
-{
-    { NULL,        NULL } /* sentinel */
-};
-
-
 
 static void publishError(lua_State* L, int module, const char* errorName)
 {

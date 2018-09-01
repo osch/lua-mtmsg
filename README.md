@@ -21,6 +21,16 @@ See below for full [reference documentation](#documentation) .
 
 <!-- ---------------------------------------------------------------------------------------- -->
 
+#### Requirements
+
+   * Tested operating systems: Linux, Windows, MacOS
+   * Other Unix variants: could work, but untested, required are:
+      * gcc atomic builtins or C11 `stdatomic.h`
+      * `pthread.h` or C11 `threads.h`
+   * Tested Lua versions: 5.1, 5.2, 5.3, luajit 2.0 & 2.1
+
+<!-- ---------------------------------------------------------------------------------------- -->
+
 ## Examples
 
 Simple example, passes message buffer by integer id to another

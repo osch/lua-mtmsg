@@ -8,7 +8,51 @@ const char* const MTMSG_BUFFER_CLASS_NAME = "mtmsg.buffer";
 
 typedef lua_Integer BufferId;
 
-static MsgBuffer* firstBuffer = NULL;
+typedef struct {
+    int        count;
+    MsgBuffer* firstBuffer;
+} BufferBucket;
+
+static AtomicCounter buffer_counter     = 0;
+static lua_Integer   buffer_buckets     = 0;
+static int           bucket_usage       = 0;
+static BufferBucket* buffer_bucket_list = NULL;
+
+inline static void toBuckets(MsgBuffer* b, lua_Integer n, BufferBucket* list)
+{
+    BufferBucket* bucket        = &(list[b->id % n]);
+    MsgBuffer**   firstBufferPtr = &bucket->firstBuffer;
+    if (*firstBufferPtr) {
+        (*firstBufferPtr)->prevBufferPtr = &b->nextBuffer;
+    }
+    b->nextBuffer    = *firstBufferPtr;
+    b->prevBufferPtr =  firstBufferPtr;
+    *firstBufferPtr  =  b;
+    bucket->count += 1;
+    if (bucket->count > bucket_usage) {
+        bucket_usage = bucket->count;
+    }
+}
+
+static void newBuckets(lua_Integer n, BufferBucket* newList)
+{
+    bucket_usage = 0;
+    if (buffer_bucket_list) {
+        lua_Integer i;
+        for (i = 0; i < buffer_buckets; ++i) {
+            BufferBucket* bb = &(buffer_bucket_list[i]);
+            MsgBuffer*    b  = bb->firstBuffer;
+            while (b != NULL) {
+                MsgBuffer* b2 = b->nextBuffer;
+                toBuckets(b, n, newList);
+                b = b2;
+            }
+        }
+        free(buffer_bucket_list);
+    }
+    buffer_buckets     = n;
+    buffer_bucket_list = newList;
+}
 
 static void bufferAbort(MsgBuffer* b, bool abortFlag)
 {
@@ -32,10 +76,13 @@ static void bufferAbort(MsgBuffer* b, bool abortFlag)
 
 void mtmsg_buffer_abort_all(bool abortFlag) 
 {
-    MsgBuffer* b = firstBuffer;
-    while (b != NULL) {
-        bufferAbort(b, abortFlag);
-        b = b->nextBuffer;
+    lua_Integer i;
+    for (i = 0; i < buffer_buckets; ++i) {
+        MsgBuffer* b = buffer_bucket_list[i].firstBuffer;
+        while (b != NULL) {
+            bufferAbort(b, abortFlag);
+            b = b->nextBuffer;
+        }
     }
 }
 
@@ -44,31 +91,44 @@ void mtmsg_buffer_abort_all(bool abortFlag)
     return luaL_error(L, "%s (%s:%d)", text, MTMSG_BUFFER_CLASS_NAME, line);
 }*/
 
-static MsgBuffer* findBufferWithName(const char* bufferName, size_t bufferNameLength)
+static MsgBuffer* findBufferWithName(const char* bufferName, size_t bufferNameLength, bool* unique)
 {
-    if (bufferName) {
-        MsgBuffer* b = firstBuffer;
-        while (b != NULL) {
-            if (   b->bufferName 
-                && bufferNameLength == b->bufferNameLength 
-                && memcmp(b->bufferName, bufferName, bufferNameLength) == 0)
-            {
-                return b;
+    MsgBuffer* rslt = NULL;
+    if (bufferName && buffer_bucket_list) {
+        lua_Integer i;
+        for (i = 0; i < buffer_buckets; ++i) {
+            MsgBuffer* b = buffer_bucket_list[i].firstBuffer;
+            while (b != NULL) {
+                if (   b->bufferName 
+                    && bufferNameLength == b->bufferNameLength 
+                    && memcmp(b->bufferName, bufferName, bufferNameLength) == 0)
+                {
+                    if (unique) {
+                        *unique = (rslt == NULL);
+                    }
+                    if (rslt) {
+                        return rslt;
+                    } else {
+                        rslt = b;
+                    }
+                }
+                b = b->nextBuffer;
             }
-            b = b->nextBuffer;
         }
     }
-    return NULL;
+    return rslt;
 }
 
 static MsgBuffer* findBufferWithId(BufferId bufferId)
 {
-    MsgBuffer* b = firstBuffer;
-    while (b != NULL) {
-        if (b->id == bufferId) {
-            return b;
+    if (buffer_bucket_list) {
+        MsgBuffer* b = buffer_bucket_list[bufferId % buffer_buckets].firstBuffer;
+        while (b != NULL) {
+            if (b->id == bufferId) {
+                return b;
+            }
+            b = b->nextBuffer;
         }
-        b = b->nextBuffer;
     }
     return NULL;
 }
@@ -119,10 +179,9 @@ static const char* udataToLuaString(lua_State* L, BufferUserData* udata)
 
 static MsgBuffer* createNewBuffer(Mutex* sharedMutex)
 {
-    MsgBuffer* b = malloc(sizeof(MsgBuffer));
+    MsgBuffer* b = calloc(1, sizeof(MsgBuffer));
     if (!b) return NULL;
 
-    memset(b, 0, sizeof(MsgBuffer));
     b->id      = atomic_inc(&mtmsg_id_counter);
     b->used    = 1;
     if (sharedMutex == NULL) {
@@ -132,12 +191,6 @@ static MsgBuffer* createNewBuffer(Mutex* sharedMutex)
         b->sharedMutex = sharedMutex;
     }
 
-    if (firstBuffer) {
-        firstBuffer->prevBufferPtr = &b->nextBuffer;
-    }
-    b->nextBuffer    = firstBuffer;
-    b->prevBufferPtr = &firstBuffer;
-    firstBuffer      = b;
     return b;
 }
 
@@ -179,12 +232,6 @@ int mtmsg_buffer_new(lua_State* L, ListenerUserData* listenerUdata, int arg)
 
     /* Examine global BufferList */
     
-    MsgBuffer* otherBuffer = findBufferWithName(bufferName, bufferNameLength);
-    if (otherBuffer) {
-        const char* otherString = mtmsg_buffer_tostring(L, otherBuffer);
-        async_mutex_unlock(mtmsg_global_lock);
-        return mtmsg_ERROR_OBJECT_EXISTS(L, otherString);
-    }
     Mutex* sharedMutex = NULL;
     if (listenerUdata != NULL && listenerUdata->listener != NULL) {
         sharedMutex = &listenerUdata->listener->listenerMutex;
@@ -209,6 +256,19 @@ int mtmsg_buffer_new(lua_State* L, ListenerUserData* listenerUdata, int arg)
         memcpy(newBuffer->bufferName, bufferName, bufferNameLength + 1);
         newBuffer->bufferNameLength = bufferNameLength;
     }
+    if (atomic_get(&buffer_counter) + 1 > buffer_buckets * 4 || bucket_usage > 30) {
+        lua_Integer n = buffer_buckets ? (2 * buffer_buckets) : 64;
+        BufferBucket* newList = calloc(n, sizeof(BufferBucket));
+        if (newList) {
+            newBuckets(n, newList);
+        } else if (!buffer_buckets) {
+            async_mutex_unlock(mtmsg_global_lock);
+            return mtmsg_ERROR_OUT_OF_MEMORY(L);
+        }
+    }
+    toBuckets(newBuffer, buffer_buckets, buffer_bucket_list);
+    atomic_inc(&buffer_counter);
+
     if (sharedMutex != NULL) {
         async_mutex_lock(sharedMutex);
         MsgListener* listener = listenerUdata->listener; 
@@ -264,7 +324,11 @@ static void removeFromListener(MsgListener* listener, MsgBuffer* b)
 
 static void MsgBuffer_free(MsgBuffer* b)
 {
-    *b->prevBufferPtr = b->nextBuffer;
+    bool wasInBucket = (b->prevBufferPtr != NULL);
+
+    if (wasInBucket) {
+        *b->prevBufferPtr = b->nextBuffer;
+    }
     if (b->nextBuffer) {
         b->nextBuffer->prevBufferPtr = b->prevBufferPtr;
     }
@@ -289,6 +353,27 @@ static void MsgBuffer_free(MsgBuffer* b)
     }
     mtmsg_membuf_free(&b->mem);
     free(b);
+
+    if (wasInBucket) {
+        int c = atomic_dec(&buffer_counter);
+        if (c == 0) {
+            if (buffer_bucket_list)  {
+                free(buffer_bucket_list);
+            }
+            buffer_buckets     = 0;
+            buffer_bucket_list = NULL;
+            bucket_usage      = 0;
+        }
+        else if (c * 10 < buffer_buckets) {
+            lua_Integer n = 2 * c;
+            if (n > 64) {
+                BufferBucket* newList = calloc(n, sizeof(BufferBucket));
+                if (newList) {
+                    newBuckets(n, newList);
+                }
+            }
+        }
+    }
 }
 
 static int MsgBuffer_release(lua_State* L)
@@ -367,10 +452,14 @@ static int Mtmsg_buffer(lua_State* L)
 
     MsgBuffer* buffer;
     if (bufferName != NULL) {
-        buffer = findBufferWithName(bufferName, bufferNameLength);
+        bool unique;
+        buffer = findBufferWithName(bufferName, bufferNameLength, &unique);
         if (!buffer) {
             async_mutex_unlock(mtmsg_global_lock);
             return mtmsg_ERROR_UNKNOWN_OBJECT_buffer_name(L, bufferName, bufferNameLength);
+        } else if (!unique) {
+            async_mutex_unlock(mtmsg_global_lock);
+            return mtmsg_ERROR_AMBIGUOUS_NAME_buffer_name(L, bufferName, bufferNameLength);
         }
     } else {
         buffer = findBufferWithId(bufferId);

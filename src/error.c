@@ -2,9 +2,9 @@
 
 const char* const MTMSG_ERROR_CLASS_NAME = "mtmsg.error";
 
+static const char* const MTMSG_ERROR_AMBIGUOUS_NAME    = "ambiguous_name";
 static const char* const MTMSG_ERROR_UNKNOWN_OBJECT    = "unknown_object";
 static const char* const MTMSG_ERROR_NO_BUFFERS        = "no_buffers";
-static const char* const MTMSG_ERROR_OBJECT_EXISTS     = "object_exists";
 static const char* const MTMSG_ERROR_OBJECT_CLOSED     = "object_closed";
 static const char* const MTMSG_ERROR_OPERATION_ABORTED = "operation_aborted";
 static const char* const MTMSG_ERROR_MESSAGE_SIZE      = "message_size";
@@ -75,12 +75,14 @@ int mtmsg_ERROR_UNKNOWN_OBJECT_buffer_id(lua_State* L, lua_Integer id)
     return throwErrorMessage(L, MTMSG_ERROR_UNKNOWN_OBJECT);
 }
 
-int mtmsg_ERROR_UNKNOWN_OBJECT_listener_name(lua_State* L, const char* listenerName, size_t nameLength)
+int mtmsg_ERROR_AMBIGUOUS_NAME_buffer_name(lua_State* L, const char* bufferName, size_t nameLength)
 {
-    mtmsg_util_quote_lstring(L, listenerName, nameLength);
-    lua_pushfstring(L, "listener name %s", lua_tostring(L, -1));
-    return throwErrorMessage(L, MTMSG_ERROR_UNKNOWN_OBJECT);
+    mtmsg_util_quote_lstring(L, bufferName, nameLength);
+    lua_pushfstring(L, "buffer name %s", lua_tostring(L, -1));
+    return throwErrorMessage(L, MTMSG_ERROR_AMBIGUOUS_NAME);
 }
+
+
 
 int mtmsg_ERROR_UNKNOWN_OBJECT_listener_id(lua_State* L, lua_Integer id)
 {
@@ -88,16 +90,24 @@ int mtmsg_ERROR_UNKNOWN_OBJECT_listener_id(lua_State* L, lua_Integer id)
     return throwErrorMessage(L, MTMSG_ERROR_UNKNOWN_OBJECT);
 }
 
+int mtmsg_ERROR_UNKNOWN_OBJECT_listener_name(lua_State* L, const char* listenerName, size_t nameLength)
+{
+    mtmsg_util_quote_lstring(L, listenerName, nameLength);
+    lua_pushfstring(L, "listener name %s", lua_tostring(L, -1));
+    return throwErrorMessage(L, MTMSG_ERROR_UNKNOWN_OBJECT);
+}
+
+int mtmsg_ERROR_AMBIGUOUS_NAME_listener_name(lua_State* L, const char* listenerName, size_t nameLength)
+{
+    mtmsg_util_quote_lstring(L, listenerName, nameLength);
+    lua_pushfstring(L, "listener name %s", lua_tostring(L, -1));
+    return throwErrorMessage(L, MTMSG_ERROR_AMBIGUOUS_NAME);
+}
+
 int mtmsg_ERROR_NO_BUFFERS(lua_State* L, const char* objectString)
 {
     lua_pushfstring(L, "%s", objectString);
     return throwErrorMessage(L, MTMSG_ERROR_NO_BUFFERS);
-}
-
-int mtmsg_ERROR_OBJECT_EXISTS(lua_State* L, const char* objectString)
-{
-    lua_pushfstring(L, "%s", objectString);
-    return throwErrorMessage(L, MTMSG_ERROR_OBJECT_EXISTS);
 }
 
 int mtmsg_ERROR_OBJECT_CLOSED(lua_State* L, const char* objectString)
@@ -262,9 +272,9 @@ static void publishError(lua_State* L, int module, const char* errorName)
 
 int mtmsg_error_init_module(lua_State* L, int errorModule, int errorMeta, int errorClass)
 {
+    publishError(L, errorModule, MTMSG_ERROR_AMBIGUOUS_NAME);
     publishError(L, errorModule, MTMSG_ERROR_UNKNOWN_OBJECT);
     publishError(L, errorModule, MTMSG_ERROR_NO_BUFFERS);
-    publishError(L, errorModule, MTMSG_ERROR_OBJECT_EXISTS);
     publishError(L, errorModule, MTMSG_ERROR_OBJECT_CLOSED);
     publishError(L, errorModule, MTMSG_ERROR_OPERATION_ABORTED);
     publishError(L, errorModule, MTMSG_ERROR_MESSAGE_SIZE);

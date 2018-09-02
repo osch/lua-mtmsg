@@ -114,10 +114,10 @@ assert(lst:nextmsg(0) == nil)
        * error:message()
        * err1 == err2
    * [Errors](#errors)
+       * mtmsg.error.ambiguous_name
        * mtmsg.error.message_size
        * mtmsg.error.no_buffers
        * mtmsg.error.object_closed
-       * mtmsg.error.object_exists
        * mtmsg.error.operation_aborted
        * mtmsg.error.out_of_memory
        * mtmsg.error.unknown_object
@@ -144,23 +144,26 @@ assert(lst:nextmsg(0) == nil)
   The created buffer is garbage collected if the last object referencing this
   buffer vanishes.
   
-  Possible errors: *mtmsg.error.object_exists*,
-                   *mtmsg.error.operation_aborted*
+  Possible errors: *mtmsg.error.operation_aborted*
                    
 
 * **`mtmsg.buffer(id|name)`**
 
   Creates a lua object for referencing an existing buffer. The buffer must
-  be referenced by its *id* or *name*.
+  be referenced by its *id* or *name*. Referencing the buffer by *id* is
+  much faster than referencing by *name* if the number of buffers 
+  increases.
 
     * *id* - integer, the unique buffer id that can be obtained by
              *buffer:id()*.
 
     * *name* - string, the optional name that was given when the
                buffer was created with *mtmsg.newbuffer()* or with 
-               *listener:newbuffer()*.
+               *listener:newbuffer()*. To find a buffer by name 
+               the name must be unique for the whole process.
              
-  Possible errors: *mtmsg.error.unknown_object*,
+  Possible errors: *mtmsg.error.ambiguous_name*,
+                   *mtmsg.error.unknown_object*,
                    *mtmsg.error.operation_aborted*
 
 
@@ -174,21 +177,25 @@ assert(lst:nextmsg(0) == nil)
   The created listener is garbage collected if the last reference object to this
   listener vanishes.
 
-  Possible errors: *mtmsg.error.object_exists*,
-                   *mtmsg.error.operation_aborted*,
+  Possible errors: *mtmsg.error.operation_aborted*,
 
 * **`mtmsg.listener(id|name)`**
 
   Creates a lua object for referencing an existing listener. The listener must
-  be referenced by its *id* or *name*.
+  be referenced by its *id* or *name*. Referencing the listener by *id* is
+  much faster than referencing by *name* if the number of listeners 
+  increases.
 
     * *id* - integer, the unique buffer id that can be obtained by
            *listener:id()*.
 
     * *name* - string, the optional name that was given when the
-               listener was created with *mtmsg.newlistener()*
+               listener was created with *mtmsg.newlistener()*. To
+               find a listener by name the name must be unique for
+               the whole process.
 
-  Possible errors: *mtmsg.error.unknown_object*,
+  Possible errors: *mtmsg.error.ambiguous_name*,
+                   *mtmsg.error.unknown_object*,
                    *mtmsg.error.operation_aborted*
 
 
@@ -376,8 +383,7 @@ assert(lst:nextmsg(0) == nil)
   The created buffer is garbage collected if the last object referencing this
   buffer vanishes. The buffer is **not** referenced by the connected listener.
 
-  Possible errors: *mtmsg.error.object_exists*,
-                   *mtmsg.error.operation_aborted*
+  Possible errors: *mtmsg.error.operation_aborted*
 
 
 * **`listener:nextmsg([timeout])`**
@@ -499,6 +505,15 @@ assert(lst:nextmsg(0) == nil)
 
 ### Errors
 
+* **`mtmsg.error.ambiguous_name`**
+
+  More than one buffer or listener was found for the given name to 
+  *mtmsg.buffer()* or *mtmsg.listener()*. 
+  To find a buffer by name, the buffer name must be unique among all buffers
+  of the whole process. To find a listener by name, the listener name must 
+  be unique among all listeners of the whole process 
+
+
 * **`mtmsg.error.message_size`**
   
   The size of one message exceeds the limit that was given in
@@ -516,13 +531,6 @@ assert(lst:nextmsg(0) == nil)
 
   An operation is performed on a closed buffer or listener, i.e. the method
   *buffer:close()* or *listener:close()* has been called.
-
-* **`mtmsg.error.object_exists`**
-
-  A new buffer is to be created via *mtmsg.newbuffer()* or *listener:newbuffer()*
-  with a name that refers to an already existing buffer or a new listener is to
-  be created via *mtmsg.newlistener()* with a name that refers to an already
-  existing listener. 
 
 * **`mtmsg.error.operation_aborted`**
 

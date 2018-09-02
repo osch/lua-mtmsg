@@ -39,8 +39,10 @@ do
 end
 do
     local b = mtmsg.newbuffer("hugo")
-    local ok, err = pcall(function() mtmsg.newbuffer("hugo") end)
-    assert(err == mtmsg.error.object_exists)
+    assert(mtmsg.buffer("hugo"):id() == b:id())
+    local b2 = mtmsg.newbuffer("hugo")
+    local ok, err = pcall(function() mtmsg.buffer("hugo") end)
+    assert(err == mtmsg.error.ambiguous_name)
     assert(getmetatable(err) == "mtmsg.error")
     assert(mtmsg.type(err) == "mtmsg.error")
     b:addmsg("m1")

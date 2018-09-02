@@ -8,18 +8,64 @@ const char* const MTMSG_LISTENER_CLASS_NAME = "mtmsg.listener";
 
 typedef lua_Integer ListenerId;
 
-static MsgListener* firstListener = NULL;
+typedef struct {
+    int          count;
+    MsgListener* firstListener;
+} ListenerBucket;
 
+static AtomicCounter   listener_counter     = 0;
+static lua_Integer     listener_buckets     = 0;
+static int             bucket_usage       = 0;
+static ListenerBucket* listener_bucket_list = NULL;
+
+inline static void toBuckets(MsgListener* lst, lua_Integer n, ListenerBucket* list)
+{
+    ListenerBucket* bucket        = &(list[lst->id % n]);
+    MsgListener**   firstListenerPtr = &bucket->firstListener;
+    if (*firstListenerPtr) {
+        (*firstListenerPtr)->prevListenerPtr = &lst->nextListener;
+    }
+    lst->nextListener    = *firstListenerPtr;
+    lst->prevListenerPtr =  firstListenerPtr;
+    *firstListenerPtr    =  lst;
+    bucket->count += 1;
+    if (bucket->count > bucket_usage) {
+        bucket_usage = bucket->count;
+    }
+}
+
+static void newBuckets(lua_Integer n, ListenerBucket* newList)
+{
+    bucket_usage = 0;
+    if (listener_bucket_list) {
+        lua_Integer i;
+        for (i = 0; i < listener_buckets; ++i) {
+            ListenerBucket* bb = &(listener_bucket_list[i]);
+            MsgListener*    lst  = bb->firstListener;
+            while (lst != NULL) {
+                MsgListener* b2 = lst->nextListener;
+                toBuckets(lst, n, newList);
+                lst = b2;
+            }
+        }
+        free(listener_bucket_list);
+    }
+    listener_buckets     = n;
+    listener_bucket_list = newList;
+}
 
 void mtmsg_listener_abort_all(bool abortFlag) 
 {
-    MsgListener* lst = firstListener;
-    while (lst != NULL) {
-        async_mutex_lock(&lst->listenerMutex);
-        lst->aborted = abortFlag;
-        async_mutex_notify(&lst->listenerMutex);
-        async_mutex_unlock(&lst->listenerMutex);
-        lst = lst->nextListener;
+    lua_Integer i;
+    for (i = 0; i < listener_buckets; ++i) {
+        MsgListener* lst = listener_bucket_list[i].firstListener;
+        while (lst != NULL) {
+            async_mutex_lock(&lst->listenerMutex);
+            lst->aborted = abortFlag;
+            async_mutex_notify(&lst->listenerMutex);
+            async_mutex_unlock(&lst->listenerMutex);
+            lst = lst->nextListener;
+        }
     }
 }
 
@@ -28,50 +74,44 @@ void mtmsg_listener_abort_all(bool abortFlag)
     return luaL_error(L, "%s (%s:%d)", text, MTMSG_LISTENER_CLASS_NAME, line);
 }*/
 
-static MsgListener* createNewListener()
+static MsgListener* findListenerWithName(const char* listenerName, size_t listenerNameLength, bool* unique)
 {
-    MsgListener* listener = malloc(sizeof(MsgListener));
-    if (!listener) return NULL;
-
-    memset(listener, 0, sizeof(MsgListener));
-    listener->id      = atomic_inc(&mtmsg_id_counter);
-    listener->used    = 1;
-    async_mutex_init(&listener->listenerMutex);
-
-    if (firstListener) {
-        firstListener->prevListenerPtr = &listener->nextListener;
-    }
-    listener->nextListener    = firstListener;
-    listener->prevListenerPtr = &firstListener;
-    firstListener             = listener;
-    return listener;
-}
-
-static MsgListener* findListenerWithName(const char* listenerName, size_t listenerNameLength)
-{
-    if (listenerName) {
-        MsgListener* lst = firstListener;
-        while (lst != NULL) {
-            if (   lst->listenerName 
-                && listenerNameLength == lst->listenerNameLength 
-                && memcmp(lst->listenerName, listenerName, listenerNameLength) == 0)
-            {
-                return lst;
+    MsgListener* rslt = NULL;
+    if (listenerName && listener_bucket_list) {
+        lua_Integer i;
+        for (i = 0; i < listener_buckets; ++i) {
+            MsgListener* lst = listener_bucket_list[i].firstListener;
+            while (lst != NULL) {
+                if (   lst->listenerName 
+                    && listenerNameLength == lst->listenerNameLength 
+                    && memcmp(lst->listenerName, listenerName, listenerNameLength) == 0)
+                {
+                    if (unique) {
+                        *unique = (rslt == NULL);
+                    }
+                    if (rslt) {
+                        return rslt;
+                    } else {
+                        rslt = lst;
+                    }
+                }
+                lst = lst->nextListener;
             }
-            lst = lst->nextListener;
         }
     }
-    return NULL;
+    return rslt;
 }
 
 static MsgListener* findListenerWithId(ListenerId listenerId)
 {
-    MsgListener* b = firstListener;
-    while (b != NULL) {
-        if (b->id == listenerId) {
-            return b;
+    if (listener_bucket_list) {
+        MsgListener* lst = listener_bucket_list[listenerId % listener_buckets].firstListener;
+        while (lst != NULL) {
+            if (lst->id == listenerId) {
+                return lst;
+            }
+            lst = lst->nextListener;
         }
-        b = b->nextListener;
     }
     return NULL;
 }
@@ -175,10 +215,14 @@ static int Mtmsg_listener(lua_State* L)
 
     MsgListener* listener;
     if (listenerName != NULL) {
-        listener = findListenerWithName(listenerName, listenerNameLength);
+        bool unique;
+        listener = findListenerWithName(listenerName, listenerNameLength, &unique);
         if (!listener) {
             async_mutex_unlock(mtmsg_global_lock);
             return mtmsg_ERROR_UNKNOWN_OBJECT_listener_name(L, listenerName, listenerNameLength);
+        } else if (!unique) {
+            async_mutex_unlock(mtmsg_global_lock);
+            return mtmsg_ERROR_AMBIGUOUS_NAME_listener_name(L, listenerName, listenerNameLength);
         }
     } else {
         listener = findListenerWithId(listenerId);
@@ -195,6 +239,20 @@ static int Mtmsg_listener(lua_State* L)
     async_mutex_unlock(mtmsg_global_lock);
     return 1;
 }
+
+
+static MsgListener* createNewListener()
+{
+    MsgListener* listener = calloc(1, sizeof(MsgListener));
+    if (!listener) return NULL;
+
+    listener->id      = atomic_inc(&mtmsg_id_counter);
+    listener->used    = 1;
+    async_mutex_init(&listener->listenerMutex);
+
+    return listener;
+}
+
 
 static int Mtmsg_newListener(lua_State* L)
 {
@@ -222,19 +280,13 @@ static int Mtmsg_newListener(lua_State* L)
         return mtmsg_ERROR_OPERATION_ABORTED(L);
     }
 
-    MsgListener* otherListener = findListenerWithName(listenerName, listenerNameLength);
-    if (otherListener) {
-        const char* otherString = listenerToLuaString(L, otherListener);
-        async_mutex_unlock(mtmsg_global_lock);
-        return mtmsg_ERROR_OBJECT_EXISTS(L, otherString);
-    }
-
     MsgListener* newListener = createNewListener();
     if (!newListener) {
         async_mutex_unlock(mtmsg_global_lock);
         return mtmsg_ERROR_OUT_OF_MEMORY(L);
     }
     userData->listener = newListener;
+    
     if (listenerName) {
         newListener->listenerName = malloc(listenerNameLength + 1);
         if (newListener->listenerName == NULL) {
@@ -244,21 +296,61 @@ static int Mtmsg_newListener(lua_State* L)
         memcpy(newListener->listenerName, listenerName, listenerNameLength + 1);
         newListener->listenerNameLength = listenerNameLength;
     }
+
+    if (atomic_get(&listener_counter) + 1 > listener_buckets * 4 || bucket_usage > 30) {
+        lua_Integer n = listener_buckets ? (2 * listener_buckets) : 64;
+        ListenerBucket* newList = calloc(n, sizeof(ListenerBucket));
+        if (newList) {
+            newBuckets(n, newList);
+        } else if (!listener_buckets) {
+            async_mutex_unlock(mtmsg_global_lock);
+            return mtmsg_ERROR_OUT_OF_MEMORY(L);
+        }
+    }
+    toBuckets(newListener, listener_buckets, listener_bucket_list);
+    atomic_inc(&listener_counter);
+
     async_mutex_unlock(mtmsg_global_lock);
     return 1;
 }
 
-void mtmsg_listener_free(MsgListener* listener) /* mtmsg_global_lock */
+void mtmsg_listener_free(MsgListener* lst) /* mtmsg_global_lock */
 {
-    if (listener->listenerName) {
-        free(listener->listenerName);
+    bool wasInBucket = (lst->prevListenerPtr != NULL);
+
+    if (wasInBucket) {
+        *lst->prevListenerPtr = lst->nextListener;
     }
-    *listener->prevListenerPtr = listener->nextListener;
-    if (listener->nextListener) {
-        listener->nextListener->prevListenerPtr = listener->prevListenerPtr;
+    if (lst->nextListener) {
+        lst->nextListener->prevListenerPtr = lst->prevListenerPtr;
     }
-    async_mutex_destruct(&listener->listenerMutex);
-    free(listener);
+
+    if (lst->listenerName) {
+        free(lst->listenerName);
+    }
+    async_mutex_destruct(&lst->listenerMutex);
+    free(lst);
+
+    if (wasInBucket) {
+        int c = atomic_dec(&listener_counter);
+        if (c == 0) {
+            if (listener_bucket_list)  {
+                free(listener_bucket_list);
+            }
+            listener_buckets     = 0;
+            listener_bucket_list = NULL;
+            bucket_usage      = 0;
+        }
+        else if (c * 10 < listener_buckets) {
+            lua_Integer n = 2 * c;
+            if (n > 64) {
+                ListenerBucket* newList = calloc(n, sizeof(ListenerBucket));
+                if (newList) {
+                    newBuckets(n, newList);
+                }
+            }
+        }
+    }
 }
 
 static int MsgListener_release(lua_State* L)

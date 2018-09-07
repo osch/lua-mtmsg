@@ -58,3 +58,4 @@ for _, SIZE in ipairs(sizes) do
     print("*************", string.format("%10.3f MB/sec, %10.0f op/sec, %10d bytes/op, %10.6f msec/op", inBytesCount/totalTime/1024/1024, inCount/totalTime, SIZE, totalTime/inCount*1000))
     assert(inBytesCount == threadCount)
 end
+print("OK.")

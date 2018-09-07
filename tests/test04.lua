@@ -112,7 +112,7 @@ local tasks = {
             end
             collectgarbage()
             local ok, err = pcall(function() listener:nextmsg(0) end)
-            assert(not ok and err == mtmsg.error.no_buffers)
+            assert(not ok and err:match(mtmsg.error.no_buffers))
         end
         
         return impl

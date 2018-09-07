@@ -116,3 +116,4 @@ for _, thread in ipairs(threadList) do
     print("PARENT: child returned: ", thread:join())
 end
 
+print("OK.")

@@ -58,3 +58,4 @@ for run = 1, 2 do
     printTime("Call by id:", startTime)
     --------------------------------------------------------------
 end
+print("OK.")

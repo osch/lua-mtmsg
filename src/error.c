@@ -1,6 +1,6 @@
 #include "error.h"
 
-const char* const MTMSG_ERROR_CLASS_NAME = "mtmsg.error";
+static const char* const MTMSG_ERROR_CLASS_NAME = "mtmsg.error";
 
 static const char* const MTMSG_ERROR_AMBIGUOUS_NAME    = "ambiguous_name";
 static const char* const MTMSG_ERROR_UNKNOWN_OBJECT    = "unknown_object";
@@ -17,34 +17,16 @@ typedef struct Error {
     int         traceback;
 } Error;
 
-/* pops message from stack */
-static void pushErrorClass(lua_State* L, const char* name)
-{
-    Error* e = lua_newuserdata(L, sizeof(Error));
-    e->name       = name;
-    e->details    = LUA_NOREF;
-    e->traceback  = LUA_NOREF;
-    luaL_setmetatable(L, MTMSG_ERROR_CLASS_NAME);
-}
-
 static void pushErrorMessage(lua_State* L, const char* name, int details)
 {
-    int top = lua_gettop(L);
-    
-    Error* e = lua_newuserdata(L, sizeof(Error)); ++top;
-    e->name  = name;
-
     if (details != 0) {
-        lua_pushvalue(L, details);
-        e->details = luaL_ref(L, LUA_REGISTRYINDEX);
+        lua_pushfstring(L, "%s.%s: %s", MTMSG_ERROR_CLASS_NAME, 
+                                        name, 
+                                        lua_tostring(L, details));
     } else {
-        e->details = LUA_NOREF;
+        lua_pushfstring(L, "%s.%s", MTMSG_ERROR_CLASS_NAME, 
+                                    name);
     }
-
-    luaL_traceback(L, L, NULL, 0);
-    e->traceback = luaL_ref(L, LUA_REGISTRYINDEX);
-
-    luaL_setmetatable(L, MTMSG_ERROR_CLASS_NAME);
 }
 
 /* error message details must be on top of stack */
@@ -153,124 +135,14 @@ int mtmsg_ERROR_MESSAGE_SIZE_bytes(lua_State* L, size_t bytes, size_t limit, con
 }
 
 
-static int Error_name(lua_State* L)
-{
-    int arg = 1;
-    Error* e = luaL_checkudata(L, arg++, MTMSG_ERROR_CLASS_NAME);
-    
-    lua_pushfstring(L, "%s.%s", MTMSG_ERROR_CLASS_NAME, e->name);
-    return 1;
-}
-
-static int Error_details(lua_State* L)
-{
-    int arg = 1;
-    Error* e = luaL_checkudata(L, arg++, MTMSG_ERROR_CLASS_NAME);
-    
-    if (e->details != LUA_NOREF) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, e->details);
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-static int Error_traceback(lua_State* L)
-{
-    int arg = 1;
-    Error* e = luaL_checkudata(L, arg++, MTMSG_ERROR_CLASS_NAME);
-    
-    if (e->traceback != LUA_NOREF) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, e->traceback);
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-static int Error_message(lua_State* L)
-{
-    int arg = 1;
-    Error* e = luaL_checkudata(L, arg++, MTMSG_ERROR_CLASS_NAME);
-    
-    if (e->details != LUA_NOREF) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, e->details);
-        lua_rawgeti(L, LUA_REGISTRYINDEX, e->traceback);
-        lua_pushfstring(L, "%s.%s: %s\n%s", MTMSG_ERROR_CLASS_NAME, 
-                                            e->name, 
-                                            lua_tostring(L, -2),
-                                            lua_tostring(L, -1));
-        lua_remove(L, -2);
-        lua_remove(L, -2);
-    }
-    else if (e->traceback != LUA_NOREF) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, e->traceback);
-        lua_pushfstring(L, "%s.%s\n%s", MTMSG_ERROR_CLASS_NAME, 
-                                        e->name, 
-                                        lua_tostring(L, -1));
-        lua_remove(L, -2);
-    }
-    else {
-        lua_pushfstring(L, "%s.%s", MTMSG_ERROR_CLASS_NAME, 
-                                    e->name);
-    }
-    return 1;
-}
-
-static int Error_equals(lua_State* L)
-{
-    if (lua_gettop(L) < 2 || (!lua_isuserdata(L, 1) && !lua_isuserdata(L, 2))) {
-        return luaL_error(L, "bad arguments");
-    }
-    Error* e1 = luaL_testudata(L, 1, MTMSG_ERROR_CLASS_NAME);
-    Error* e2 = luaL_testudata(L, 2, MTMSG_ERROR_CLASS_NAME);
-    if (e1 == NULL && e2 == NULL) {
-        return luaL_error(L, "bad arguments");
-    }
-    if (e1 != NULL && e2 != NULL) {
-        lua_pushboolean(L, e1->name == e2->name);
-    } else {
-        lua_pushboolean(L, false);
-    }
-    return 1;
-}
-
-static int Error_release(lua_State* L)
-{
-    int arg = 1;
-    Error* e = luaL_checkudata(L, arg++, MTMSG_ERROR_CLASS_NAME);
-    luaL_unref(L, LUA_REGISTRYINDEX, e->details);
-    luaL_unref(L, LUA_REGISTRYINDEX, e->traceback);
-    return 0;
-}
-
-static const luaL_Reg ErrorMethods[] = 
-{
-    { "name",      Error_name      },
-    { "details",   Error_details   },
-    { "traceback", Error_traceback },
-    { "message",   Error_message   },
-
-    { NULL,       NULL } /* sentinel */
-};
-
-static const luaL_Reg ErrorMetaMethods[] = 
-{
-    { "__tostring", Error_message  },
-    { "__eq",       Error_equals   },
-    { "__gc",       Error_release  },
-
-    { NULL,       NULL } /* sentinel */
-};
-
 
 static void publishError(lua_State* L, int module, const char* errorName)
 {
-    pushErrorClass(L, errorName);
+    lua_pushfstring(L, "%s.%s", MTMSG_ERROR_CLASS_NAME, errorName);
     lua_setfield(L, module, errorName);
 }
 
-int mtmsg_error_init_module(lua_State* L, int errorModule, int errorMeta, int errorClass)
+int mtmsg_error_init_module(lua_State* L, int errorModule)
 {
     publishError(L, errorModule, MTMSG_ERROR_AMBIGUOUS_NAME);
     publishError(L, errorModule, MTMSG_ERROR_UNKNOWN_OBJECT);
@@ -279,17 +151,6 @@ int mtmsg_error_init_module(lua_State* L, int errorModule, int errorMeta, int er
     publishError(L, errorModule, MTMSG_ERROR_OPERATION_ABORTED);
     publishError(L, errorModule, MTMSG_ERROR_MESSAGE_SIZE);
     publishError(L, errorModule, MTMSG_ERROR_OUT_OF_MEMORY);
-    
-    lua_pushvalue(L, errorMeta);
-        luaL_setfuncs(L, ErrorMetaMethods, 0);
-
-        lua_pushvalue(L, errorClass);
-            luaL_setfuncs(L, ErrorMethods, 0);
-        
-    lua_pop(L, 2);
-
-    lua_pushstring(L, MTMSG_ERROR_CLASS_NAME);
-    lua_setfield(L, errorMeta, "__metatable");
     
     return 0;
 }

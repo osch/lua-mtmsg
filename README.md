@@ -107,12 +107,6 @@ assert(lst:nextmsg(0) == nil)
        * listener:close()
        * listener:abort()
        * listener:isabort()
-   * [Error Methods](#error-methods)
-       * error:name()
-       * error:details()
-       * error:traceback()
-       * error:message()
-       * err1 == err2
    * [Errors](#errors)
        * mtmsg.error.ambiguous_name
        * mtmsg.error.message_size
@@ -235,8 +229,8 @@ assert(lst:nextmsg(0) == nil)
   Returns *"userdata"* for userdata where the *__name* field in the metatable is missing
   or does not have a corresponding entry in the lua registry.
   
-  Returns *"mtmsg.buffer"*, *"mtmsg.listener"* or *"mtmsg.error"* if the arg is one
-  of the userdata types provided by the mtmsg package.
+  Returns *"mtmsg.buffer"* or *"mtmsg.listener"* if the arg is one of the userdata types 
+  provided by the mtmsg package.
 
 
 <!-- ---------------------------------------------------------------------------------------- -->
@@ -465,45 +459,24 @@ assert(lst:nextmsg(0) == nil)
 
 <!-- ---------------------------------------------------------------------------------------- -->
 
-### Error Methods
+### Errors
 
-* **`error:name()`**
+* All errors raised by this module are string values. Special error strings are
+  available in the table `mtmsg.error`, example:
 
-  Name of the error as string, example:
-  
   ```lua
   local mtmsg = require("mtmsg")
-  assert(mtmsg.error.object_closed:name() == "mtmsg.error.object_closed")
+  assert(mtmsg.error.object_closed == "mtmsg.error.object_closed")
   ```
   
-* **`error:details()`**
-
-  Additional details as string regarding this error.
-
-* **`error:traceback()`**
-
-  Stacktrace as string where the error occured.
-
-* **`error:message()`**
-
-  Full message as string containing name, details and traceback.
-  Same as *tostring(error)*.
+  These can be used for error evaluation purposes, example:
   
-* **`err1 == err2`**
-  
-  Two errors are considered equal if they have the same name. This can be used
-  for error evaluation, example:
-
   ```lua
   local mtmsg = require("mtmsg")
   local listener = mtmsg.newlistener()
   local _, err = pcall(function() listener:nextmsg() end)
-  assert(err == mtmsg.error.no_buffers)
+  assert(err:match(mtmsg.error.no_buffers))
   ```
-
-<!-- ---------------------------------------------------------------------------------------- -->
-
-### Errors
 
 * **`mtmsg.error.ambiguous_name`**
 
@@ -580,7 +553,7 @@ assert(lst:nextmsg(0) == nil)
   assert(thread:join())
   collectgarbage()
   local _, err = pcall(function() lst:nextmsg() end)
-  assert(err == mtmsg.error.no_buffers)
+  assert(err:match(mtmsg.error.no_buffers))
   ```
 
 End of document.

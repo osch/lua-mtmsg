@@ -217,10 +217,6 @@ DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
     int listenerMeta = ++n; luaL_newmetatable(L, MTMSG_LISTENER_CLASS_NAME);
     int listenerClass= ++n; lua_newtable(L);
 
-    int errorMeta = ++n; luaL_newmetatable(L, MTMSG_ERROR_CLASS_NAME);
-    int errorClass= ++n; lua_newtable(L);
-
-
     lua_pushvalue(L, module);
         luaL_setfuncs(L, ModuleFunctions, 0);
     lua_pop(L, 1);
@@ -256,15 +252,11 @@ DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
     lua_pushvalue(L, listenerClass);
     lua_setfield (L, listenerMeta, "__index");
 
-    lua_pushvalue(L, errorClass);
-    lua_setfield (L, errorMeta, "__index");
-
-
     lua_checkstack(L, LUA_MINSTACK);
     
     mtmsg_buffer_init_module  (L, module,      bufferMeta,   bufferClass);
     mtmsg_listener_init_module(L, module,      listenerMeta, listenerClass);
-    mtmsg_error_init_module   (L, errorModule, errorMeta,    errorClass);
+    mtmsg_error_init_module   (L, errorModule);
     
     lua_settop(L, module);
     return 1;

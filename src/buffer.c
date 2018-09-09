@@ -675,11 +675,15 @@ int mtmsg_buffer_push_msg(lua_State* L)
     size_t p = 0;
     int    i = 0;
     while (true) {
+        if (i % 10 == 0) {
+            luaL_checkstack(L, 10 + LUA_MINSTACK, NULL);
+        }
         char type = buffer[p++];
         switch (type) {
             case BUFFER_END: {
                 par->msgLength = p;
                 par->argCount  = i;
+                luaL_checkstack(L, LUA_MINSTACK, NULL);
                 return i;
             }
             case BUFFER_NIL: {

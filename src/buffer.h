@@ -4,8 +4,6 @@
 #include "util.h"
 #include "listener.h"
 
-extern const char* const MTMSG_BUFFER_CLASS_NAME;
-
 typedef struct MsgBuffer {
     lua_Integer        id;
     AtomicCounter      used;
@@ -48,7 +46,7 @@ typedef struct PushMsgPar {
 /*size_t mtmsg_buffer_getsize(const char* buffer);*/
 int mtmsg_buffer_push_msg(lua_State* L);
 
-int mtmsg_buffer_init_module(lua_State* L, int module, int bufferMeta, int bufferClass);
+int mtmsg_buffer_init_module(lua_State* L, int module);
 
 void mtmsg_buffer_abort_all(bool abortFlag);
 

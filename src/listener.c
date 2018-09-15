@@ -4,7 +4,7 @@
 #include "main.h"
 #include "error.h"
 
-const char* const MTMSG_LISTENER_CLASS_NAME = "mtmsg.listener";
+static const char* const MTMSG_LISTENER_CLASS_NAME = "mtmsg.listener";
 
 typedef lua_Integer ListenerId;
 
@@ -175,6 +175,17 @@ static const char* udataToLuaString(lua_State* L, ListenerUserData* udata)
     }
 }
 
+static void setupListenerMeta(lua_State* L);
+
+static int pushListenerMeta(lua_State* L)
+{
+    if (luaL_newmetatable(L, MTMSG_LISTENER_CLASS_NAME)) {
+        setupListenerMeta(L);
+    }
+    return 1;
+}
+
+
 
 static int Mtmsg_listener(lua_State* L)
 {
@@ -201,7 +212,8 @@ static int Mtmsg_listener(lua_State* L)
 
     ListenerUserData* userData = lua_newuserdata(L, sizeof(ListenerUserData)); /* create before lock */
     memset(userData, 0, sizeof(ListenerUserData));
-    luaL_setmetatable(L, MTMSG_LISTENER_CLASS_NAME);
+    pushListenerMeta(L); /* -> udata, meta */
+    lua_setmetatable(L, -2); /* -> udata */
     
     /* Lock */
     
@@ -271,7 +283,8 @@ static int Mtmsg_newListener(lua_State* L)
     
     ListenerUserData* userData = lua_newuserdata(L, sizeof(ListenerUserData)); /* create before lock */
     memset(userData, 0, sizeof(ListenerUserData));
-    luaL_setmetatable(L, MTMSG_LISTENER_CLASS_NAME);
+    pushListenerMeta(L); /* -> udata, meta */
+    lua_setmetatable(L, -2); /* -> udata */
 
     async_mutex_lock(mtmsg_global_lock);
 
@@ -681,23 +694,29 @@ static const luaL_Reg ModuleFunctions[] =
     { NULL,           NULL } /* sentinel */
 };
 
-
-
-int mtmsg_listener_init_module(lua_State* L, int module, int listenerMeta, int listenerClass)
+static void setupListenerMeta(lua_State* L)
 {
+    lua_pushstring(L, MTMSG_LISTENER_CLASS_NAME);
+    lua_setfield(L, -2, "__metatable");
+
+    luaL_setfuncs(L, MsgListenerMetaMethods, 0);
+    
+    lua_newtable(L);  /* ListenerClass */
+        luaL_setfuncs(L, MsgListenerMethods, 0);
+    lua_setfield (L, -2, "__index");
+}
+
+
+int mtmsg_listener_init_module(lua_State* L, int module)
+{
+    if (luaL_newmetatable(L, MTMSG_LISTENER_CLASS_NAME)) {
+        setupListenerMeta(L);
+    }
+    lua_pop(L, 1);
+
     lua_pushvalue(L, module);
         luaL_setfuncs(L, ModuleFunctions, 0);
+    lua_pop(L, 1);
 
-        lua_pushvalue(L, listenerMeta);
-            luaL_setfuncs(L, MsgListenerMetaMethods, 0);
-    
-            lua_pushvalue(L, listenerClass);
-                luaL_setfuncs(L, MsgListenerMethods, 0);
-    
-    lua_pop(L, 3);
-
-    lua_pushstring(L, MTMSG_LISTENER_CLASS_NAME);
-    lua_setfield(L, listenerMeta, "__metatable");
-    
     return 0;
 }

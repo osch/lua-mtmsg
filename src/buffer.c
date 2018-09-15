@@ -4,7 +4,7 @@
 #include "main.h"
 #include "error.h"
 
-const char* const MTMSG_BUFFER_CLASS_NAME = "mtmsg.buffer";
+static const char* const MTMSG_BUFFER_CLASS_NAME = "mtmsg.buffer";
 
 typedef lua_Integer BufferId;
 
@@ -194,6 +194,16 @@ static MsgBuffer* createNewBuffer(Mutex* sharedMutex)
     return b;
 }
 
+static void setupBufferMeta(lua_State* L);
+
+static int pushBufferMeta(lua_State* L)
+{
+    if (luaL_newmetatable(L, MTMSG_BUFFER_CLASS_NAME)) {
+        setupBufferMeta(L);
+    }
+    return 1;
+}
+
 int mtmsg_buffer_new(lua_State* L, ListenerUserData* listenerUdata, int arg)
 {
     const char* bufferName       = NULL;
@@ -221,8 +231,9 @@ int mtmsg_buffer_new(lua_State* L, ListenerUserData* listenerUdata, int arg)
 
     BufferUserData* bufferUdata = lua_newuserdata(L, sizeof(BufferUserData)); /* create before lock */
     memset(bufferUdata, 0, sizeof(BufferUserData));
-    luaL_setmetatable(L, MTMSG_BUFFER_CLASS_NAME);
-
+    pushBufferMeta(L);       /* -> udata, meta */
+    lua_setmetatable(L, -2); /* -> udata */
+    
     async_mutex_lock(mtmsg_global_lock);
 
     if (mtmsg_abort_flag) {
@@ -439,7 +450,8 @@ static int Mtmsg_buffer(lua_State* L)
 
     BufferUserData* userData = lua_newuserdata(L, sizeof(BufferUserData)); /* create before lock */
     memset(userData, 0, sizeof(BufferUserData));
-    luaL_setmetatable(L, MTMSG_BUFFER_CLASS_NAME);
+    pushBufferMeta(L);       /* -> udata, meta */
+    lua_setmetatable(L, -2); /* -> udata */
 
     /* Lock */
     
@@ -1072,23 +1084,30 @@ static const luaL_Reg ModuleFunctions[] =
     { NULL,        NULL } /* sentinel */
 };
 
-
-int mtmsg_buffer_init_module(lua_State* L, int module, int bufferMeta, int bufferClass)
+static void setupBufferMeta(lua_State* L)
 {
+    lua_pushstring(L, MTMSG_BUFFER_CLASS_NAME);
+    lua_setfield(L, -2, "__metatable");
+
+    luaL_setfuncs(L, MsgBufferMetaMethods, 0);
+    
+    lua_newtable(L);  /* BufferClass */
+        luaL_setfuncs(L, MsgBufferMethods, 0);
+    lua_setfield (L, -2, "__index");
+}
+
+
+int mtmsg_buffer_init_module(lua_State* L, int module)
+{
+    if (luaL_newmetatable(L, MTMSG_BUFFER_CLASS_NAME)) {
+        setupBufferMeta(L);
+    }
+    lua_pop(L, 1);
+    
     lua_pushvalue(L, module);
         luaL_setfuncs(L, ModuleFunctions, 0);
+    lua_pop(L, 1);
 
-        lua_pushvalue(L, bufferMeta);
-            luaL_setfuncs(L, MsgBufferMetaMethods, 0);
-    
-            lua_pushvalue(L, bufferClass);
-                luaL_setfuncs(L, MsgBufferMethods, 0);
-    
-    lua_pop(L, 3);
-
-    lua_pushstring(L, MTMSG_BUFFER_CLASS_NAME);
-    lua_setfield(L, bufferMeta, "__metatable");
-    
     return 0;
 }
 

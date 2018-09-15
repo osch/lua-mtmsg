@@ -2,6 +2,7 @@
 [![Licence](http://img.shields.io/badge/Licence-MIT-brightgreen.svg)](LICENSE)
 [![Build Status](https://travis-ci.org/osch/lua-mtmsg.png?branch=master)](https://travis-ci.org/osch/lua-mtmsg)
 [![Build status](https://ci.appveyor.com/api/projects/status/r4gwhqv2jvv2jirn?svg=true)](https://ci.appveyor.com/project/osch/lua-mtmsg)
+[![Install](https://img.shields.io/badge/Install-LuaRocks-brightgreen.svg)](https://luarocks.org/modules/osch/mtmsg)
 
 <!-- ---------------------------------------------------------------------------------------- -->
 

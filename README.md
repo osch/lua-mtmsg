@@ -318,7 +318,7 @@ assert(lst:nextmsg(0) == nil)
 
   if *flag* is not given or *true* the buffer referencing object will operate
   in *nonblock mode*. This does not affect the underlying buffer, i.e. several
-  buffer referencing objects could operate in different modes acessing the same 
+  buffer referencing objects could operate in different modes accessing the same 
   buffer.
   
   *Nonblock mode* affects the methods *buffer:nextmsg()*, *buffer:addmsg()*
@@ -407,7 +407,7 @@ assert(lst:nextmsg(0) == nil)
 
   if *flag* is not given or *true* the listener referencing object will operate
   in *nonblock mode*. This does not affect the underlying listener, i.e. several
-  listener referencing objects could operate in different modes acessing the same 
+  listener referencing objects could operate in different modes accessing the same 
   listener.
   
   *Nonblock mode* affects the method *listener:nextmsg()*: this method returns

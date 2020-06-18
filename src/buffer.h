@@ -7,6 +7,7 @@
 typedef struct MsgBuffer {
     lua_Integer        id;
     AtomicCounter      used;
+    bool               unreachable;
     char*              bufferName;
     size_t             bufferNameLength;
     bool               aborted;
@@ -50,7 +51,9 @@ int mtmsg_buffer_init_module(lua_State* L, int module);
 
 void mtmsg_buffer_abort_all(bool abortFlag);
 
-static inline void mtmsg_buffer_remove_from_ready_list(MsgListener* listener, MsgBuffer* b)
+void mtmsg_buffer_free_unreachable(MsgListener* listener, MsgBuffer* b);
+
+static inline void mtmsg_buffer_remove_from_ready_list(MsgListener* listener, MsgBuffer* b, bool freeIfUnreachable)
 {
     if (b->prevReadyBuffer) {
         b->prevReadyBuffer->nextReadyBuffer = b->nextReadyBuffer;
@@ -66,6 +69,9 @@ static inline void mtmsg_buffer_remove_from_ready_list(MsgListener* listener, Ms
     }
     b->prevReadyBuffer = NULL;
     b->nextReadyBuffer = NULL;
+    if (freeIfUnreachable && b->unreachable) {
+        mtmsg_buffer_free_unreachable(listener, b);
+    }
 }
 static inline bool mtmsg_is_on_ready_list(MsgListener* listener, MsgBuffer* b)
 {
@@ -82,7 +88,6 @@ static inline void mtmsg_buffer_add_to_ready_list(MsgListener* listener, MsgBuff
         listener->lastReadyBuffer  = b;
     }
 }
-
 
 
 #endif /* MTMSG_BUFFER_H */

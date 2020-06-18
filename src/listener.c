@@ -331,6 +331,15 @@ void mtmsg_listener_free(MsgListener* lst) /* mtmsg_global_lock */
 {
     bool wasInBucket = (lst->prevListenerPtr != NULL);
 
+    MsgBuffer* b = lst->firstListenerBuffer;
+    while (b) {
+        MsgBuffer* b2 = b->nextListenerBuffer;
+        if (b->unreachable) {
+            mtmsg_buffer_free_unreachable(lst, b);
+        }
+        b = b2;
+    }
+
     if (wasInBucket) {
         *lst->prevListenerPtr = lst->nextListener;
     }
@@ -451,9 +460,12 @@ again:
                 }
                 b->mem.bufferLength -= par.msgLength;
                 {
-                    mtmsg_buffer_remove_from_ready_list(listener, b);
+                    mtmsg_buffer_remove_from_ready_list(listener, b, false);
                 }
                 if (b->mem.bufferLength == 0) {
+                    if (b->unreachable) {
+                        mtmsg_buffer_free_unreachable(listener, b);
+                    }
                     b->mem.bufferStart = b->mem.bufferData;
                 } else {
                     b->mem.bufferStart  += par.msgLength;
@@ -468,7 +480,7 @@ again:
             else
             {
                 MsgBuffer* b2 = b->nextReadyBuffer;
-                mtmsg_buffer_remove_from_ready_list(listener, b);
+                mtmsg_buffer_remove_from_ready_list(listener, b, true);
                 b = b2;
             }
         }
@@ -585,8 +597,9 @@ static int MsgListener_clear(lua_State* L)
     MsgBuffer* b = listener->firstListenerBuffer;
     while (b != NULL) {
         b->mem.bufferLength = 0;
-        mtmsg_buffer_remove_from_ready_list(listener, b);
-        b = b->nextListenerBuffer;
+        MsgBuffer* b2 = b->nextListenerBuffer;
+        mtmsg_buffer_remove_from_ready_list(listener, b, true);
+        b = b2;
     }
     async_mutex_unlock(&listener->listenerMutex);
 
@@ -605,9 +618,10 @@ static int MsgListener_close(lua_State* L)
     MsgBuffer* b = listener->firstListenerBuffer;
     while (b != NULL) {
         b->closed = true;
-        mtmsg_buffer_remove_from_ready_list(listener, b);
+        MsgBuffer* b2 = b->nextListenerBuffer;
+        mtmsg_buffer_remove_from_ready_list(listener, b, true);
         mtmsg_membuf_free(&b->mem);
-        b = b->nextListenerBuffer;
+        b = b2;
     }
     listener->closed = true;
     async_mutex_notify(&listener->listenerMutex);
@@ -635,15 +649,16 @@ static int MsgListener_abort(lua_State* L)
 
     MsgBuffer* b = listener->firstListenerBuffer;
     while (b != NULL) {
+        MsgBuffer* b2 = b->nextListenerBuffer;
         if (b->aborted != abortFlag) {
             b->aborted = abortFlag;
             if (abortFlag) {
-                mtmsg_buffer_remove_from_ready_list(listener, b);
+                mtmsg_buffer_remove_from_ready_list(listener, b, false);
             } else if (b->mem.bufferLength > 0) {
                 mtmsg_buffer_add_to_ready_list(listener, b);
             }
         }
-        b = b->nextListenerBuffer;
+        b = b2;
     }
     if (abortFlag) {
         async_mutex_notify(&listener->listenerMutex);

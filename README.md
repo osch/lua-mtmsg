@@ -377,6 +377,9 @@ assert(lst:nextmsg(0) == nil)
 
   The created buffer is garbage collected if the last object referencing this
   buffer vanishes. The buffer is **not** referenced by the connected listener.
+  
+  If the buffer is garbage collected, the remaining messages in this buffer are 
+  still delivered to the listener, i.e. these messages are not discarded.
 
   Possible errors: *mtmsg.error.operation_aborted*
 

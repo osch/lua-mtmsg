@@ -62,7 +62,7 @@ static void bufferAbort(MsgBuffer* b, bool abortFlag)
         b->aborted = abortFlag;
         if (abortFlag) {
             if (b->listener) {
-                mtmsg_buffer_remove_from_ready_list(b->listener, b);
+                mtmsg_buffer_remove_from_ready_list(b->listener, b, false);
             }
         } else {
             if (b->listener && b->mem.bufferLength > 0) {
@@ -314,26 +314,36 @@ static int Mtmsg_newBuffer(lua_State* L)
 
 static void removeFromListener(MsgListener* listener, MsgBuffer* b)
 {
-    {
-        MsgBuffer** b1 = &listener->firstListenerBuffer;
-        MsgBuffer*  b2 =  listener->firstListenerBuffer;
-        while (b2 != NULL) {
-            if (b2 == b) {
-                *b1 = b2->nextListenerBuffer;
-                b2->listener           = NULL;
-                b2->nextListenerBuffer = NULL;
-                break;
-            }
-            b1 = &b2->nextListenerBuffer;
-            b2 =  b2->nextListenerBuffer;
+    MsgBuffer** b1 = &listener->firstListenerBuffer;
+    MsgBuffer*  b2 =  listener->firstListenerBuffer;
+    while (b2 != NULL) {
+        if (b2 == b) {
+            *b1 = b2->nextListenerBuffer;
+            b2->listener           = NULL;
+            b2->nextListenerBuffer = NULL;
+            break;
         }
-    }
-    {
-        mtmsg_buffer_remove_from_ready_list(listener, b);
+        b1 = &b2->nextListenerBuffer;
+        b2 =  b2->nextListenerBuffer;
     }
 }
 
-static void MsgBuffer_free(MsgBuffer* b)
+static void freeBuffer2(MsgBuffer* b)
+{
+    if (b->bufferName) {
+        free(b->bufferName);
+    }
+    mtmsg_membuf_free(&b->mem);
+    free(b);
+}
+
+void mtmsg_buffer_free_unreachable(MsgListener* listener, MsgBuffer* b)
+{
+    removeFromListener(listener, b);
+    freeBuffer2(b);
+}
+
+static void freeBuffer(MsgBuffer* b)
 {
     bool wasInBucket = (b->prevBufferPtr != NULL);
 
@@ -343,6 +353,9 @@ static void MsgBuffer_free(MsgBuffer* b)
     if (b->nextBuffer) {
         b->nextBuffer->prevBufferPtr = b->prevBufferPtr;
     }
+    
+    bool needsFree2 = true;
+
     if (b->sharedMutex == &b->ownMutex) {
         async_mutex_destruct(&b->ownMutex);
     }
@@ -351,7 +364,14 @@ static void MsgBuffer_free(MsgBuffer* b)
             MsgListener* listener = b->listener;
 
             async_mutex_lock(b->sharedMutex);
-            removeFromListener(listener, b);
+
+                if (mtmsg_is_on_ready_list(listener, b)) {
+                    b->unreachable = true;
+                    needsFree2 = false;
+                } else {
+                    removeFromListener(listener, b);
+                }
+
             async_mutex_unlock(b->sharedMutex);
             
             if (atomic_dec(&listener->used) == 0) {
@@ -359,11 +379,9 @@ static void MsgBuffer_free(MsgBuffer* b)
             }
         }
     }
-    if (b->bufferName) {
-        free(b->bufferName);
+    if (needsFree2) {
+        freeBuffer2(b);
     }
-    mtmsg_membuf_free(&b->mem);
-    free(b);
 
     if (wasInBucket) {
         int c = atomic_dec(&buffer_counter);
@@ -396,7 +414,7 @@ static int MsgBuffer_release(lua_State* L)
         async_mutex_lock(mtmsg_global_lock);
 
         if (atomic_dec(&b->used) == 0) {
-            MsgBuffer_free(b);
+            freeBuffer(b);
         }
         udata->buffer = NULL;
         
@@ -415,7 +433,7 @@ static int MsgBuffer_close(lua_State* L)
 
     b->closed = true;
     if (b->listener) {
-        mtmsg_buffer_remove_from_ready_list(b->listener, b);
+        mtmsg_buffer_remove_from_ready_list(b->listener, b, false);
     }
     mtmsg_membuf_free(&b->mem);
     async_mutex_notify(b->sharedMutex);
@@ -779,7 +797,7 @@ static int MsgBuffer_clear(lua_State* L)
     b->mem.bufferLength = 0;
     
     if (b->listener) {
-        mtmsg_buffer_remove_from_ready_list(b->listener, b);
+        mtmsg_buffer_remove_from_ready_list(b->listener, b, false);
     }
 
     async_mutex_unlock(b->sharedMutex);
@@ -918,7 +936,7 @@ again:
             b->mem.bufferStart += par.msgLength;
         }
         if (b->listener) {
-            mtmsg_buffer_remove_from_ready_list(b->listener, b);
+            mtmsg_buffer_remove_from_ready_list(b->listener, b, false);
         }
         if (b->mem.bufferLength > 0) {
             if (b->listener) {

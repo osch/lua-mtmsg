@@ -1,3 +1,8 @@
+if jit then
+   print("Skipping test under LuaJit (more details: https://github.com/osch/lua-threading-playground)")
+   return 
+end
+
 local llthreads = require("llthreads2.ex")
 local mtmsg     = require("mtmsg")
 

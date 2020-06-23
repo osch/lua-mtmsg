@@ -4,6 +4,8 @@
 #include "util.h"
 #include "listener.h"
 
+extern const char* const MTMSG_BUFFER_CLASS_NAME;;
+
 typedef struct MsgBuffer {
     lua_Integer        id;
     AtomicCounter      used;
@@ -38,20 +40,15 @@ int mtmsg_buffer_new(lua_State* L, struct ListenerUserData* listenerUdata, int a
 
 const char* mtmsg_buffer_tostring(lua_State* L, MsgBuffer* q);
 
-typedef struct PushMsgPar {
-    const char* buffer;
-    size_t      msgLength;
-    int         argCount;
-} PushMsgPar;
-
-/*size_t mtmsg_buffer_getsize(const char* buffer);*/
-int mtmsg_buffer_push_msg(lua_State* L);
-
 int mtmsg_buffer_init_module(lua_State* L, int module);
 
 void mtmsg_buffer_abort_all(bool abortFlag);
 
 void mtmsg_buffer_free_unreachable(MsgListener* listener, MsgBuffer* b);
+
+bool mtmsg_buffer_set_or_add_msg(lua_State* L, BufferUserData* udata, bool clear, int arg, const char* args, size_t args_size);
+
+int mtmsg_buffer_next_msg(lua_State* L, BufferUserData* udata, int arg, MemBuffer* resultBuffer, size_t* argsSize);
 
 static inline void mtmsg_buffer_remove_from_ready_list(MsgListener* listener, MsgBuffer* b, bool freeIfUnreachable)
 {

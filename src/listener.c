@@ -1,10 +1,10 @@
-#include "util.h"
 #include "listener.h"
 #include "buffer.h"
+#include "serialize.h"
 #include "main.h"
 #include "error.h"
 
-static const char* const MTMSG_LISTENER_CLASS_NAME = "mtmsg.listener";
+const char* const MTMSG_LISTENER_CLASS_NAME = "mtmsg.listener";
 
 typedef lua_Integer ListenerId;
 
@@ -403,12 +403,10 @@ static int MsgListener_newBuffer(lua_State* L)
 }
 
 
-static int MsgListener_nextMsg(lua_State* L)
+int mtmsg_listener_next_msg(lua_State* L, ListenerUserData* listenerUdata, int arg, 
+                            MemBuffer* resultBuffer, size_t* argsSize)
 {
-    int arg = 1;
-    
-    ListenerUserData* listenerUdata = luaL_checkudata(L, arg++, MTMSG_LISTENER_CLASS_NAME);
-    MsgListener*      listener      = listenerUdata->listener;
+    MsgListener* listener = listenerUdata->listener;
 
     lua_Number endTime   = 0; /* 0 = no timeout */
 
@@ -446,19 +444,44 @@ again:
     {
         MsgBuffer* b  = listener->firstReadyBuffer;
         while (b != NULL) {
-            if (b->mem.bufferLength > 0) 
-            {
-                PushMsgPar par; par.buffer    = b->mem.bufferStart;
-                                par.msgLength = 0;
-                                par.argCount  = 0;
-                lua_pushcfunction(L, mtmsg_buffer_push_msg);
-                lua_pushlightuserdata(L, &par);
-                int rc = lua_pcall(L, 1, LUA_MULTRET, 0);
-                if (rc != LUA_OK) {
-                    async_mutex_unlock(&listener->listenerMutex);
-                    return lua_error(L);
+            if (b->mem.bufferLength > 0) {
+                SerializedMsgSizes sizes;
+                mtmsg_serialize_parse_header(b->mem.bufferStart, &sizes);
+                if (argsSize) *argsSize = sizes.args_size;
+                
+                size_t msg_size;
+                int    parsedArgCount = 0;
+                if (resultBuffer == NULL) {
+                    GetMsgArgsPar par; par.inBuffer       = b->mem.bufferStart + sizes.header_size;
+                                       par.inBufferSize   = sizes.args_size;
+                                       par.inMaxArgCount  = -1;
+                                       par.parsedLength   = 0;
+                                       par.parsedArgCount = 0;
+                    lua_pushcfunction(L, mtmsg_serialize_get_msg_args);
+                    lua_pushlightuserdata(L, &par);
+                    int rc = lua_pcall(L, 1, LUA_MULTRET, 0);
+                    if (rc != LUA_OK) {
+                        async_mutex_unlock(&listener->listenerMutex);
+                        return lua_error(L);
+                    }
+                    parsedArgCount = par.parsedArgCount;
+                    msg_size = sizes.header_size + par.parsedLength;
+                } else {
+                    int rc = mtmsg_membuf_reserve(resultBuffer, sizes.args_size);
+                    if (rc != 0) {
+                        async_mutex_unlock(&listener->listenerMutex);
+                        return rc;
+                    }
+                    memcpy(resultBuffer->bufferStart + resultBuffer->bufferLength, 
+                           b->mem.bufferStart + sizes.header_size, 
+                           sizes.args_size);
+                    resultBuffer->bufferLength += sizes.args_size;
+                    
+                    msg_size = sizes.header_size + sizes.args_size;
+                    parsedArgCount = 1;
                 }
-                b->mem.bufferLength -= par.msgLength;
+                
+                b->mem.bufferLength -= msg_size;
                 {
                     mtmsg_buffer_remove_from_ready_list(listener, b, false);
                 }
@@ -468,14 +491,14 @@ again:
                     }
                     b->mem.bufferStart = b->mem.bufferData;
                 } else {
-                    b->mem.bufferStart  += par.msgLength;
+                    b->mem.bufferStart  += msg_size;
                     mtmsg_buffer_add_to_ready_list(listener, b);
                 }
                 if (listener->firstReadyBuffer) {
                     async_mutex_notify(&listener->listenerMutex);
                 }
                 async_mutex_unlock(&listener->listenerMutex);
-                return par.argCount;
+                return parsedArgCount;
             }
             else
             {
@@ -499,6 +522,17 @@ again:
     async_mutex_unlock(&listener->listenerMutex);
     return 0;
 }
+
+static int MsgListener_nextMsg(lua_State* L)
+{
+    int arg = 1;
+    ListenerUserData* udata = luaL_checkudata(L, arg++, MTMSG_LISTENER_CLASS_NAME);
+    
+    int parsedArgCount = mtmsg_listener_next_msg(L, udata, arg, NULL, NULL);
+    return parsedArgCount; // parsedArgCount because resultBuffer is NULL
+}
+
+
 
 static int MsgListener_toString(lua_State* L)
 {

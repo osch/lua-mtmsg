@@ -10,13 +10,13 @@ Low-level multi-threading message buffers for the [Lua] scripting language.
 
 This package provides in-memory message buffers for inter-thread communication. 
 The implementation is independent from the underlying threading library
-(e.g. [Lanes] or [lua-llthreads2]).
+(e.g. [Lanes] or [llthreads2]).
 
 This package is also available via LuaRocks, see https://luarocks.org/modules/osch/mtmsg.
 
-[Lua]:               https://www.lua.org
-[Lanes]:             https://luarocks.org/modules/benoitgermain/lanes
-[lua-llthreads2]:    https://luarocks.org/modules/moteus/lua-llthreads2
+[Lua]:           https://www.lua.org
+[Lanes]:         https://luarocks.org/modules/benoitgermain/lanes
+[llthreads2]:    https://luarocks.org/modules/moteus/lua-llthreads2
 
 See below for full [reference documentation](#documentation) .
 
@@ -34,8 +34,8 @@ See below for full [reference documentation](#documentation) .
 
 ## Examples
 
-Simple example, passes message buffer by integer id to another
-thread:
+Simple example, passes message buffer by integer id to another thread 
+([llthreads2] is used as multi-threading implementation in this example):
 
 ```lua
 local llthreads = require("llthreads2.ex")
@@ -85,6 +85,8 @@ assert(lst:nextmsg(0) == nil)
        * mtmsg.time()
        * mtmsg.sleep()
        * mtmsg.type()
+       * mtmsg.newwriter()
+       * mtmsg.newreader()
    * [Buffer Methods](#buffer-methods)
        * buffer:id()
        * buffer:name()
@@ -108,6 +110,15 @@ assert(lst:nextmsg(0) == nil)
        * listener:close()
        * listener:abort()
        * listener:isabort()
+   * [Writer Methods](#writer-methods)
+       * writer:add()
+       * writer:addmsg()
+       * writer:setmsg()
+       * writer:clear()
+   * [Reader Methods](#reader-methods)
+       * reader:next()
+       * reader:nextmsg()
+       * reader:clear()
    * [Errors](#errors)
        * mtmsg.error.ambiguous_name
        * mtmsg.error.message_size
@@ -232,6 +243,44 @@ assert(lst:nextmsg(0) == nil)
   
   Returns *"mtmsg.buffer"* or *"mtmsg.listener"* if the arg is one of the userdata types 
   provided by the mtmsg package.
+
+
+* **`mtmsg.newwriter([size[,grow]])`**
+
+  Creates a new writer. A writer can be used to build up messages incrementally by adding
+  new message elements using *writer:add()*. The message than can be added to a buffer
+  using *writer:addmsg()* in one atomic step.
+
+    * *size*  - optional integer, initial size in bytes for the memory that
+                holds all message elements for this writer (defaults to *1024*).
+    * *grow*  - optional float, the factor how fast memory grows if more
+                message elements have to be buffered. If *0*, the used
+                memory is fixed by the initially given size. If *<=1* the 
+                memory grows only by the needed bytes (default value is *2*,
+                i.e. the size doubles if memory needs to grow).
+  
+  The created writer canot be accessed from other threads and is garbage collected
+  like any normal Lua value.
+  
+
+* **`mtmsg.newreader([size[,grow]])`**
+
+  Creates a new reader. A reader can be used to parse messages incrementally by invoking
+  *reader:next()* to get the message elements. Invoking *reader:nextmsg()* gets the next
+  message of a buffer or listener into the reader in one atomic step.
+
+
+    * *size*  - optional integer, initial size in bytes for the memory that
+                holds all message elements for this reader (defaults to *1024*).
+    * *grow*  - optional float, the factor how fast memory grows if more
+                message elements have to be buffered. If *0*, the used
+                memory is fixed by the initially given size. If *<=1* the 
+                memory grows only by the needed bytes (default value is *2*,
+                i.e. the size doubles if memory needs to grow).
+  
+  The created reader canot be accessed from other threads and is garbage collected
+  like any normal Lua value.
+  
 
 
 <!-- ---------------------------------------------------------------------------------------- -->
@@ -463,6 +512,129 @@ assert(lst:nextmsg(0) == nil)
 
 <!-- ---------------------------------------------------------------------------------------- -->
 
+### Writer Methods
+
+A writer can be used to build up messages incrementally by adding
+new message elements using *writer:add()*. 
+
+The message than can be added to a buffer using *writer:addmsg()* in one atomic step.
+
+For example, this code
+```lua
+    writer:add("foo1"); writer:add("foo2", "foo3"); writer:addmsg(buffer)
+```
+is equivalent to
+```lua
+    buffer:addmsg("foo1", "foo2", "foo3")
+```
+
+* **`writer:add(...)`**
+
+  Adds the arguments as message elements into the writer. Arguments can be
+  simple data types (string, number, boolean, nil, light user data).
+  
+  Possible errors: *mtmsg.error.message_size*
+
+* **`writer:addmsg(buffer)`**
+
+  Adds the writer's message elements together as one message to the buffer. 
+  
+  Returns *true* if the message could be added to the buffer. In this case,
+  the message elements are removed from the writer, i.e. the writer can
+  be re-used to build a new message.
+  
+  Returns *false* if *buffer:isnonblock() == true* and the buffer is
+  concurrently accessed from a parallel thread. 
+  
+  Returns *false* if the buffer was created with a grow factor *0* and the
+  current buffer messages together with the new message would exceed the
+  buffer's fixed size.
+  
+  Possible errors: *mtmsg.error.object_closed*,
+                   *mtmsg.error.operation_aborted*
+
+* **`writer:setmsg(buffer)`**
+
+  Sets the writer's message elements together as one message into the buffer. 
+  All other messages in the given buffer are discarded.
+  
+  Returns *true* if the message could be added to the buffer. 
+  
+  Returns *false* if *buffer:isnonblock() == true* and the buffer is
+  concurrently accessed from a parallel thread. 
+  
+  Returns *false* if the buffer was created with a grow factor *0* and the
+  current buffer messages together with the new message would exceed the
+  buffer's fixed size.
+  
+  Possible errors: *mtmsg.error.object_closed*,
+                   *mtmsg.error.operation_aborted*
+
+* **`writer:clear()`**
+  
+  Removes all message elements from the writer.
+
+<!-- ---------------------------------------------------------------------------------------- -->
+
+### Reader Methods
+
+A reader can be used to parse messages incrementally by invoking *reader:next()* to get the message 
+elements. 
+
+Invoking *reader:nextmsg()* gets the next message of a buffer or listener into the reader in one 
+atomic step.
+
+For example, this code
+```lua
+    reader:nextmsg(buffer); local a = reader:next(); local b, c = reader:next(2)
+```
+is equivalent to
+```lua
+    local a, b, c = buffer:nextmsg()
+```
+
+* **`reader:next([count])`**
+
+  Returns next message elements from the reader. Returns *nil* If no more message elements 
+  are available. The returned elements are removed from the reader's internal list of message
+  elements.
+
+  * *count* - optional integer, the maximaum number of message elements to be returned
+              (defaults to 1).
+
+* **`reader:nextmsg(buffer|listener, [timeout])`**
+
+  Gets the next message of a buffer or listener into the reader in one atomic step. The
+  message is removed from the given buffer or listener. If the reader contained older
+  message elements from a previous message these are discarded before all messages elements 
+  from the new message are added to the reader, i.e. after this call the reader contains 
+  only message elements from the new message.
+
+  * *timeout* optional float, maximal time in seconds for waiting for the next 
+    message. The method returns *false* if timeout is reached and no message
+    was reveived.
+
+  Returns *true* if a message could be obtained from the given buffer or listener. In
+  this case the message is removed from the given buffer or listener.
+
+  If no timeout is given and *isnonblock() == false* for the given buffer or listener then 
+  this methods waits without timeout limit until a next message becomes available.
+
+  If no timeout is given and *isnonblock() == true* for the given buffer or listener then this 
+  methods returns immediately *false*  if no next message is available or if the given buffer 
+  or listener is concurrently accessed from another thread.
+
+  Possible errors: *mtmsg.error.no_buffers*,
+                   *mtmsg.error.object_closed*,
+                   *mtmsg.error.operation_aborted*
+
+* **`reader:clear()`**
+  
+  Removes all message elements from the reader.
+
+
+<!-- ---------------------------------------------------------------------------------------- -->
+
 ### Errors
 
 * All errors raised by this module are string values. Special error strings are
@@ -493,9 +665,9 @@ assert(lst:nextmsg(0) == nil)
 
 * **`mtmsg.error.message_size`**
   
-  The size of one message exceeds the limit that was given in
-  *mtmsg.newbuffer()* or *listener:newbuffer()* and a grow factor *0* was
-  specified to prevent buffer growing.
+  The size of one message exceeds the limit that was given in *mtmsg.newbuffer()*, 
+  *listener:newbuffer()*, *mtmsg.newwriter()* or *mtmsg.newreader()* and a grow
+  factor *0* was specified to prevent the internal memory buffer growing.
   
 * **`mtmsg.error.no_buffers`**
 

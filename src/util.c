@@ -47,9 +47,9 @@ void mtmsg_membuf_free(MemBuffer* b)
 }
 
 /**
- * 0 : ok
- * 1 : buffer should not grow
- * 2 : buffer can   not grow
+ *  0 : ok
+ * -1 : buffer should not grow
+ * -2 : buffer can   not grow
  */
 int mtmsg_membuf_reserve(MemBuffer* b, size_t additionalLength)
 {
@@ -65,7 +65,7 @@ int mtmsg_membuf_reserve(MemBuffer* b, size_t additionalLength)
                 size_t newCapacity = 2 * (newLength);
                 b->bufferData = malloc(newCapacity);
                 if (b->bufferData == NULL) {
-                    return 2;
+                    return -2;
                 }
                 b->bufferStart    = b->bufferData;
                 b->bufferCapacity = newCapacity;
@@ -76,13 +76,13 @@ int mtmsg_membuf_reserve(MemBuffer* b, size_t additionalLength)
                 }
                 char* newData = realloc(b->bufferData, newCapacity);
                 if (newData == NULL) {
-                    return 2;
+                    return -2;
                 }
                 b->bufferData     = newData;
                 b->bufferStart    = newData;
                 b->bufferCapacity = newCapacity;
             } else {
-                return 1;
+                return -1;
             }
         }
     }

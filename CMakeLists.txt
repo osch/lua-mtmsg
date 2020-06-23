@@ -33,6 +33,9 @@ ADD_LIBRARY (
 	src/main.c
 	src/buffer.c
 	src/listener.c
+	src/writer.c
+	src/reader.c
+	src/serialize.c
 	src/util.c
 	src/error.c
 	src/async_util.c

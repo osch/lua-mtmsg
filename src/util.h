@@ -79,9 +79,9 @@ bool mtmsg_membuf_init(MemBuffer* b, size_t initialCapacity, lua_Number growFact
 void mtmsg_membuf_free(MemBuffer* b);
 
 /**
- * 0 : ok
- * 1 : buffer should not grow
- * 2 : buffer can   not grow
+ *  0 : ok
+ * -1 : buffer should not grow
+ * -2 : buffer can   not grow
  */
 int mtmsg_membuf_reserve(MemBuffer* b, size_t additionalLength);
 

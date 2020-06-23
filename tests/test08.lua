@@ -1,87 +1,83 @@
 local llthreads = require("llthreads2.ex")
 local mtmsg     = require("mtmsg")
-local threadIn  = mtmsg.newbuffer()
-local threadOut = mtmsg.newbuffer()
-local T = 6 -- total time in seconds
-local N = 1000
-local thread    = llthreads.new(function(threadInId, threadOutId, N)
-                                    local mtmsg  = require("mtmsg")
-                                    local threadIn  = mtmsg.buffer(threadInId)
-                                    local threadOut = mtmsg.buffer(threadOutId)
-                                    local stop = false
-                                    local objects = {}
-                                    for i = 1, N do
-                                        objects[i] = {
-                                          a = i, b = i + 1, c = i + 3, d = i + 4
-                                        }
-                                    end
-                                    local writeTime = 0
-                                    local writeCount = 0
-                                    local lastPrint = mtmsg.time()
-                                    while not stop do
-                                        local msg = threadIn:nextmsg(0.020)
-                                        if msg == "stop" then
-                                            stop = true
-                                        else
-                                            threadOut:addmsg("next")
-                                            local startT = mtmsg.time()
-                                            for i = 1, #objects do
-                                                local obj = objects[i]
-                                                threadOut:addmsg(i, obj.a, obj.b, obj.c, obj.d)
-                                            end
-                                            local endT = mtmsg.time()
-                                            local dt = endT - startT
-                                            writeTime = writeTime + dt
-                                            writeCount = writeCount + 1
-                                            if  endT > lastPrint + 1 then
-                                                io.write(string.format("write: %5.3fms for %d objects\n", 
-                                                                       writeTime/writeCount * 1000, N))
-                                                lastPrint = endT
-                                                writeTime = 0
-                                                writeCount = 0
-                                            end
-                                        end
-                                    end
+print(mtmsg._VERSION)
+local threadIn  = mtmsg.newbuffer("threadIn")
+local listener  = mtmsg.newlistener()
+local threadOut1 = listener:newbuffer("threadOut1")
+local threadOut2 = listener:newbuffer("threadOut2")
+
+local threadOut1Id = threadOut1:id()
+local threadOut2Id = threadOut2:id()
+
+print("=============================")
+print(threadOut1)
+print(threadOut2)
+print("=============================")
+
+local thread    = llthreads.new(function(inId, outId1, outId2)
+                                    local mtmsg     = require("mtmsg")
+                                    local threadIn  = mtmsg.buffer(inId)
+                                    local threadOut1 = mtmsg.buffer(outId1)
+                                    local threadOut2 = mtmsg.buffer(outId2)
+                                    print(threadOut1)
+                                    print(threadOut2)
+                                    print("=============================")
+                                    threadOut1:addmsg("started")
+                                    assert(threadIn:nextmsg() == "continue1")
+                                    threadOut2:addmsg("response1")
+                                    assert(threadIn:nextmsg() == "continue2")
+                                    threadOut2 = nil
+                                    collectgarbage()
+                                    threadOut1:addmsg("response2")
+                                    assert(threadIn:nextmsg() == "exit")
+                                    threadOut1:addmsg("finished")
+                                    threadOut1 = nil
                                 end,
-                                threadIn:id(), threadOut:id(), N)
+                                threadIn:id(),
+                                threadOut1Id,
+                                threadOut2Id)
+-- threadOut1 = nil -- not now!
+-- collectgarbage()
+
 thread:start()
-local readTime = 0
-local readCount = 0
-local lastPrint = mtmsg.time()
 
-local startTime = mtmsg.time()
+assert(listener:nextmsg() == "started")
 
-local objects = {}
-while mtmsg.time() < startTime + T do
-    local startT
-    assert("next" == threadOut:nextmsg())
-    startT = mtmsg.time()
-    for i = 1, N do 
-        local i2, a, b, c, d = threadOut:nextmsg()
-        assert(i2 == i)
-        local obj = objects[i]
-        if not obj then
-            obj = {}
-            objects[i] = obj
-        end
-        obj.a = a
-        obj.b = b
-        obj.c = c
-        obj.d = d
-        assert(obj.a == i)
-    end
-    local endT = mtmsg.time()
-    local dt = endT - startT
-    readTime = readTime + dt
-    readCount = readCount + 1
-    if  endT > lastPrint + 1 then
-        io.write(string.format("read : %5.3fms for %d objects\n", 
-                               readTime/readCount * 1000, N))
-        lastPrint = endT
-        readTime = 0
-        readCount = 0
-    end
-end
-threadIn:addmsg("stop")
-thread:join()
+threadOut1 = nil -- now it's safe
+collectgarbage()
+
+threadIn:addmsg("continue1")
+
+print(mtmsg.buffer(threadOut2Id))
+
+threadOut2 = nil collectgarbage()
+
+print(mtmsg.buffer(threadOut2Id)) collectgarbage()
+
+assert(listener:nextmsg() == "response1")
+threadIn:addmsg("continue2")
+
+assert(listener:nextmsg() == "response2")
+local _, err = pcall(function() mtmsg.buffer(threadOut2Id) end)
+assert(err:match(mtmsg.error.unknown_object))
+
+print(mtmsg.buffer(threadOut1Id)) collectgarbage()
+
+print("=============================")
+
+threadIn:addmsg("exit")
+assert(thread:join())
+
+print("=============================")
+
+local _, err = pcall(function() mtmsg.buffer(threadOut1Id) end)
+assert(err:match(mtmsg.error.unknown_object))
+
+assert(listener:nextmsg() == "finished")
+
+print("=============================")
+
+local _, err = pcall(function() listener:nextmsg() end)
+assert(err:match(mtmsg.error.no_buffers))
+
 print("OK.")

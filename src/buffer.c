@@ -1,10 +1,10 @@
-#include "util.h"
 #include "buffer.h"
 #include "listener.h"
+#include "serialize.h"
 #include "main.h"
 #include "error.h"
 
-static const char* const MTMSG_BUFFER_CLASS_NAME = "mtmsg.buffer";
+const char* const MTMSG_BUFFER_CLASS_NAME = "mtmsg.buffer";
 
 typedef lua_Integer BufferId;
 
@@ -506,273 +506,7 @@ static int Mtmsg_buffer(lua_State* L)
     return 1;
 }
 
-typedef enum {
-    BUFFER_END,
-    BUFFER_NIL,
-    BUFFER_INTEGER,
-    BUFFER_BYTE,
-    BUFFER_NUMBER,
-    BUFFER_BOOLEAN,
-    BUFFER_STRING, 
-    BUFFER_SMALLSTRING,
-    BUFFER_LIGHTUSERDATA
-    
-} BufferDataType;
 
-static size_t calcArgsSize(lua_State* L, int firstArg, int* errorArg)
-{
-    size_t rslt = 1; /* BUFFER_END */
-    int n = lua_gettop(L);
-    int i;
-    for (i = firstArg; i <= n; ++i)
-    {
-        int type = lua_type(L, i);
-        switch (type) {
-            case LUA_TNIL: {
-                rslt += 1; 
-                break;
-            }
-            case LUA_TNUMBER:  {
-                if (lua_isinteger(L, i)) {
-                    lua_Integer value = lua_tointeger(L, i);
-                    if (0 <= value && value <= 0xff) {
-                        rslt += 1 + 1;
-                    } else {
-                        rslt += 1 + sizeof(lua_Integer);
-                    }
-                } else {
-                    rslt += 1 + sizeof(lua_Number);
-                }
-                break;
-            }
-            case LUA_TBOOLEAN: {
-                rslt += 2; 
-                break;
-            }
-            case LUA_TSTRING: {
-                size_t len = 0;
-                lua_tolstring(L, i, &len);
-                if (len <= 0xff) {
-                    rslt += 1 + 1 + len;
-                } else {
-                    rslt += 1 + sizeof(size_t) + len;
-                }
-                break;
-            }
-            case LUA_TLIGHTUSERDATA: {
-                rslt += 1 + sizeof(void*);
-                break;
-            }
-            case LUA_TTABLE:
-            case LUA_TFUNCTION:
-            case LUA_TUSERDATA:
-            case LUA_TTHREAD:
-            default: {
-                *errorArg = i;
-                return 0;
-            }
-        }
-    }
-    return rslt;
-}
-
-static void argsToBuffer(lua_State* L, int firstArg, char* buffer)
-{
-    size_t p = 0;
-    int    n = lua_gettop(L);
-    int    i;
-
-    for (i = firstArg; i <= n; ++i)
-    {
-        int type = lua_type(L, i);
-        switch (type) {
-            case LUA_TNIL: {
-                buffer[p++] = BUFFER_NIL;
-                break;
-            }
-            case LUA_TNUMBER:  {
-                if (lua_isinteger(L, i)) {
-                    lua_Integer value = lua_tointeger(L, i);
-                    if (0 <= value && value <= 0xff) {
-                        buffer[p++] = BUFFER_BYTE;
-                        buffer[p++] = ((char)value);
-                    } else {
-                        buffer[p++] = BUFFER_INTEGER;
-                        memcpy(buffer + p, &value, sizeof(lua_Integer));
-                        p += sizeof(lua_Integer);
-                    }
-                } else {
-                    buffer[p++] = BUFFER_NUMBER;
-                    lua_Number value = lua_tonumber(L, i);
-                    memcpy(buffer + p, &value, sizeof(lua_Number));
-                    p += sizeof(lua_Number);
-                }
-                break;
-            }
-            case LUA_TBOOLEAN: {
-                buffer[p++] = BUFFER_BOOLEAN;
-                buffer[p++] = lua_toboolean(L, i);
-                break;
-            }
-            case LUA_TSTRING: {
-                size_t      len     = 0;
-                const char* content = lua_tolstring(L, i, &len);
-                if (len <= 0xff) {
-                    buffer[p++] = BUFFER_SMALLSTRING;
-                    buffer[p++] = ((char)len);
-                } else {
-                    buffer[p++] = BUFFER_STRING;
-                    memcpy(buffer + p, &len, sizeof(size_t));
-                    p += sizeof(size_t);
-                }
-                memcpy(buffer + p, content, len);
-                p += len;
-                break;
-            }
-            case LUA_TLIGHTUSERDATA: {
-                void* value = lua_touserdata(L, i);
-                buffer[p++] = BUFFER_LIGHTUSERDATA;
-                memcpy(buffer + p, &value, sizeof(void*));
-                p += sizeof(void*);
-                break;
-            }
-            default: {
-                break;
-            }
-        }
-    }
-    
-    buffer[p++] = BUFFER_END;
-}
-
-#if 0
-size_t mtmsg_buffer_getsize(const char* buffer)
-{
-    size_t p = 0;
-    while (true) {
-        char type = buffer[p++];
-        switch (type) {
-            case BUFFER_END: {
-                return p;
-            }
-            case BUFFER_NIL: {
-                break;
-            }
-            case BUFFER_INTEGER: {
-                p += sizeof(lua_Integer);
-                break;
-            }
-            case BUFFER_BYTE: {
-                p += 1;
-                break;
-            }
-            case BUFFER_NUMBER: {
-                p += sizeof(lua_Number);
-                break;
-            }
-            case BUFFER_BOOLEAN: {
-                p += 1;
-                break;
-            }
-            case BUFFER_STRING: {
-                size_t len;
-                memcpy(&len, buffer + p, sizeof(size_t));
-                p += sizeof(size_t);
-                p += len;
-                break;
-            }
-            case BUFFER_SMALLSTRING: {
-                size_t len = ((size_t)(buffer[p++])) & 0xff;
-                p += len;
-                break;
-            }
-            case BUFFER_LIGHTUSERDATA: {
-                p += sizeof(void*);
-                break;
-            }
-            default: {
-                break;
-            }
-        }
-    }
-}
-#endif
-
-int mtmsg_buffer_push_msg(lua_State* L)
-{
-    PushMsgPar* par = (PushMsgPar*)lua_touserdata(L, 1);
-    const char* buffer = par->buffer;
-    size_t p = 0;
-    int    i = 0;
-    while (true) {
-        if (i % 10 == 0) {
-            luaL_checkstack(L, 10 + LUA_MINSTACK, NULL);
-        }
-        char type = buffer[p++];
-        switch (type) {
-            case BUFFER_END: {
-                par->msgLength = p;
-                par->argCount  = i;
-                luaL_checkstack(L, LUA_MINSTACK, NULL);
-                return i;
-            }
-            case BUFFER_NIL: {
-                lua_pushnil(L);
-                break;
-            }
-            case BUFFER_INTEGER: {
-                lua_Integer value;
-                memcpy(&value, buffer + p, sizeof(lua_Integer));
-                p += sizeof(lua_Integer);
-                lua_pushinteger(L, value);
-                break;
-            }
-            case BUFFER_BYTE: {
-                char byte = buffer[p++];
-                lua_Integer value = ((lua_Integer)byte) & 0xff;
-                lua_pushinteger(L, value);
-                break;
-            }
-            case BUFFER_NUMBER: {
-                lua_Number value;
-                memcpy(&value, buffer + p, sizeof(lua_Number));
-                p += sizeof(lua_Number);
-                lua_pushnumber(L, value);
-                break;
-            }
-            case BUFFER_BOOLEAN: {
-                lua_pushboolean(L, buffer[p++]);
-                break;
-            }
-            case BUFFER_STRING: {
-                size_t len;
-                memcpy(&len, buffer + p, sizeof(size_t));
-                p += sizeof(size_t);
-                lua_pushlstring(L, buffer + p, len);
-                p += len;
-                break;
-            }
-            case BUFFER_SMALLSTRING: {
-                size_t len = ((size_t)(buffer[p++])) & 0xff;
-                lua_pushlstring(L, buffer + p, len);
-                p += len;
-                break;
-            }
-            case BUFFER_LIGHTUSERDATA: {
-                void* value = NULL;
-                memcpy(&value, buffer + p, sizeof(void*));
-                p += sizeof(void*);
-                lua_pushlightuserdata(L, value);
-                break;
-            }
-            default: {
-                i -= 1;
-                break;
-            }
-        }
-        i += 1;
-    }
-}
 
 static int MsgBuffer_clear(lua_State* L)
 {
@@ -806,23 +540,24 @@ static int MsgBuffer_clear(lua_State* L)
 }
 
 
-static int MsgBuffer_setOrAddMsg(lua_State* L, bool clear)
+
+bool mtmsg_buffer_set_or_add_msg(lua_State* L, BufferUserData* udata, bool clear, int arg, const char* args, size_t args_size)
 {
-    int arg = 1;
-    BufferUserData* udata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
-    MsgBuffer*  b = udata->buffer;
+    MsgBuffer* b = udata->buffer;
 
-    int errorArg = 0;
-    const size_t msgLength = calcArgsSize(L, arg, &errorArg);
-
-    if (msgLength == 0) {
-        return luaL_argerror(L, errorArg, "parameter type not supported");
+    if (arg) {
+        int errorArg = 0;
+        args_size = mtmsg_serialize_calc_args_size(L, arg, &errorArg);
+        if (args_size < 0) {
+            return luaL_argerror(L, errorArg, "parameter type not supported");
+        }
     }
+    const size_t header_size = mtmsg_serialize_calc_header_size(args_size);
+    const size_t msg_size    = header_size + args_size;
     
     if (udata->nonblock) {
         if (!async_mutex_trylock(b->sharedMutex)) {
-            lua_pushboolean(L, false);
-            return 1;
+            return false;
         }
     } else {
         async_mutex_lock(b->sharedMutex);
@@ -840,28 +575,35 @@ static int MsgBuffer_setOrAddMsg(lua_State* L, bool clear)
         b->mem.bufferLength = 0;
     }
     {
-        int rc = mtmsg_membuf_reserve(&b->mem, msgLength);
+        int rc = mtmsg_membuf_reserve(&b->mem, msg_size);
         if (rc != 0) {
             async_mutex_unlock(b->sharedMutex);
-            if (rc == 1) {
+            if (rc == -1) {
                 /* buffer should not grow */
-                if (msgLength <= b->mem.bufferCapacity) {
+                if (msg_size <= b->mem.bufferCapacity) {
                     /* queue is full */
-                    lua_pushboolean(L, false);
-                    return 1;
+                    return false;
                 } else {
                     /* message is too large */
                     const char* bstring = mtmsg_buffer_tostring(L, b);
-                    return mtmsg_ERROR_MESSAGE_SIZE_bytes(L, msgLength, b->mem.bufferCapacity, bstring);
+                    return mtmsg_ERROR_MESSAGE_SIZE_bytes(L, msg_size, b->mem.bufferCapacity, bstring);
                 }
             } else {
-                return mtmsg_ERROR_OUT_OF_MEMORY_bytes(L, b->mem.bufferLength + msgLength);
+                return mtmsg_ERROR_OUT_OF_MEMORY_bytes(L, b->mem.bufferLength + msg_size);
             }
         }
     }
-    argsToBuffer(L, arg, b->mem.bufferStart + b->mem.bufferLength);
-    
-    b->mem.bufferLength += msgLength;
+    char* msgBufferStart = b->mem.bufferStart + b->mem.bufferLength;
+
+    mtmsg_serialize_header_to_buffer(args_size, msgBufferStart);
+
+    if (arg) {
+        mtmsg_serialize_args_to_buffer(L, arg, msgBufferStart + header_size);
+    }
+    else {
+        memcpy(msgBufferStart + header_size, args, args_size);
+    }
+    b->mem.bufferLength += msg_size;
 
     if (b->listener && !mtmsg_is_on_ready_list(b->listener, b)) {
         mtmsg_buffer_add_to_ready_list(b->listener, b);
@@ -869,25 +611,31 @@ static int MsgBuffer_setOrAddMsg(lua_State* L, bool clear)
 
     async_mutex_notify(b->sharedMutex);
     async_mutex_unlock(b->sharedMutex);
-    lua_pushboolean(L, true);
-    return 1;
+    return true;
 }
 
 static int MsgBuffer_setMsg(lua_State* L)
 {
+    int arg = 1;
+    BufferUserData* udata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
     bool clear = true;
-    return MsgBuffer_setOrAddMsg(L, clear);
+    bool ok = mtmsg_buffer_set_or_add_msg(L, udata, clear, arg, NULL, 0);
+    lua_pushboolean(L, ok);
+    return 1;
 }
 static int MsgBuffer_addMsg(lua_State* L)
 {
-    bool clear = false;
-    return MsgBuffer_setOrAddMsg(L, clear);
-}
-
-static int MsgBuffer_nextMsg(lua_State* L)
-{
     int arg = 1;
     BufferUserData* udata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
+    bool clear = false;
+    bool ok = mtmsg_buffer_set_or_add_msg(L, udata, clear, arg, NULL, 0);
+    lua_pushboolean(L, ok);
+    return 1;
+}
+
+    
+int mtmsg_buffer_next_msg(lua_State* L, BufferUserData* udata, int arg, MemBuffer* resultBuffer, size_t* argsSize)
+{
     MsgBuffer*  b = udata->buffer;
 
     lua_Number endTime   = 0; /* 0 = no timeout */
@@ -919,21 +667,47 @@ again:
         return mtmsg_ERROR_OPERATION_ABORTED(L);
     }
     if (b->mem.bufferLength > 0) {
-        PushMsgPar par; par.buffer    = b->mem.bufferStart;
-                        par.msgLength = 0;
-                        par.argCount  = 0;
-        lua_pushcfunction(L, mtmsg_buffer_push_msg);
-        lua_pushlightuserdata(L, &par);
-        int rc = lua_pcall(L, 1, LUA_MULTRET, 0);
-        if (rc != LUA_OK) {
-            async_mutex_unlock(b->sharedMutex);
-            return lua_error(L);
+        SerializedMsgSizes sizes;
+        mtmsg_serialize_parse_header(b->mem.bufferStart, &sizes);
+        if (argsSize) *argsSize = sizes.args_size;
+        
+        size_t msg_size;
+        int    parsedArgCount = 0;
+        if (resultBuffer == NULL) {
+            GetMsgArgsPar par; par.inBuffer       = b->mem.bufferStart + sizes.header_size;
+                               par.inBufferSize   = sizes.args_size;
+                               par.inMaxArgCount  = -1;
+                               par.parsedLength   = 0;
+                               par.parsedArgCount = 0;
+            lua_pushcfunction(L, mtmsg_serialize_get_msg_args);
+            lua_pushlightuserdata(L, &par);
+            int rc = lua_pcall(L, 1, LUA_MULTRET, 0);
+            if (rc != LUA_OK) {
+                async_mutex_unlock(b->sharedMutex);
+                return lua_error(L);
+            }
+            parsedArgCount = par.parsedArgCount;
+            msg_size = sizes.header_size + par.parsedLength;
+        } else {
+            int rc = mtmsg_membuf_reserve(resultBuffer, sizes.args_size);
+            if (rc != 0) {
+                async_mutex_unlock(b->sharedMutex);
+                return rc;
+            }
+            memcpy(resultBuffer->bufferStart + resultBuffer->bufferLength, 
+                   b->mem.bufferStart + sizes.header_size, 
+                   sizes.args_size);
+            resultBuffer->bufferLength += sizes.args_size;
+            
+            msg_size = sizes.header_size + sizes.args_size;
+            parsedArgCount = 1;
         }
-        b->mem.bufferLength -= par.msgLength;
+
+        b->mem.bufferLength -= msg_size;
         if (b->mem.bufferLength == 0) {
             b->mem.bufferStart = b->mem.bufferData;
         } else {
-            b->mem.bufferStart += par.msgLength;
+            b->mem.bufferStart += msg_size;
         }
         if (b->listener) {
             mtmsg_buffer_remove_from_ready_list(b->listener, b, false);
@@ -946,7 +720,7 @@ again:
         }
         async_mutex_unlock(b->sharedMutex);
     
-        return par.argCount;
+        return parsedArgCount;
     } else {
         if (endTime > 0) {
             lua_Number now = mtmsg_current_time_seconds();
@@ -967,6 +741,15 @@ again:
             }
         }
     }
+}
+
+static int MsgBuffer_nextMsg(lua_State* L)
+{
+    int arg = 1;
+    BufferUserData* udata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
+    
+    int parsedArgCount = mtmsg_buffer_next_msg(L, udata, arg, NULL, NULL);
+    return parsedArgCount; // parsedArgCount because resultBuffer is NULL
 }
 
 static int MsgBuffer_toString(lua_State* L)

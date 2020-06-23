@@ -3,6 +3,8 @@
 
 #include "util.h"
 
+extern const char* const MTMSG_LISTENER_CLASS_NAME;
+
 typedef struct MsgListener {
     lua_Integer          id;
     AtomicCounter        used;
@@ -30,6 +32,9 @@ typedef struct ListenerUserData {
 void mtmsg_listener_free(MsgListener* q);
 
 void mtmsg_listener_abort_all(bool abortFlag);
+
+int mtmsg_listener_next_msg(lua_State* L, ListenerUserData* listenerUdata, int arg, 
+                            MemBuffer* resultBuffer, size_t* argsSize);
 
 int mtmsg_listener_init_module(lua_State* L, int module);
 

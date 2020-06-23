@@ -1,6 +1,8 @@
 #include "main.h"
 #include "buffer.h"
 #include "listener.h"
+#include "writer.h"
+#include "reader.h"
 #include "error.h"
 
 #ifndef MTMSG_VERSION
@@ -244,6 +246,8 @@ DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
     
     mtmsg_buffer_init_module  (L, module);
     mtmsg_listener_init_module(L, module);
+    mtmsg_writer_init_module  (L, module);
+    mtmsg_reader_init_module  (L, module);
     mtmsg_error_init_module   (L, errorModule);
     
     lua_settop(L, module);

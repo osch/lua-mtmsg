@@ -1,7 +1,8 @@
 local llthreads  = require("llthreads2.ex")
 local mtmsg      = require("mtmsg")
 local threadIn   = mtmsg.newbuffer()
-local threadOut  = mtmsg.newbuffer()
+local listener   = mtmsg.newlistener()
+local threadOut  = listener:newbuffer()
 local threadOut2 = mtmsg.newbuffer()
 local T = 6 -- total time in seconds
 local N = 10000
@@ -10,6 +11,7 @@ local thread    = llthreads.new(function(threadInId, threadOutId, threadOut2Id, 
                                     local threadIn   = mtmsg.buffer(threadInId)
                                     local threadOut  = mtmsg.buffer(threadOutId)
                                     local threadOut2 = mtmsg.buffer(threadOut2Id)
+                                    local writer     = mtmsg.newwriter()
                                     local stop = false
                                     local objects = {}
                                     for i = 1, N do
@@ -28,8 +30,9 @@ local thread    = llthreads.new(function(threadInId, threadOutId, threadOut2Id, 
                                             local startT = mtmsg.time()
                                             for i = 1, #objects do
                                                 local obj = objects[i]
-                                                threadOut:addmsg(i, obj.a, obj.b, obj.c, obj.d)
+                                                writer:add(i, obj.a, obj.b, obj.c, obj.d)
                                             end
+                                            writer:addmsg(threadOut)
                                             threadOut2:addmsg("next")
                                             local endT = mtmsg.time()
                                             local dt = endT - startT
@@ -53,13 +56,15 @@ local lastPrint = mtmsg.time()
 
 local startTime = mtmsg.time()
 
+local reader = mtmsg.newreader()
 local objects = {}
 while mtmsg.time() < startTime + T do
     local startT
     assert("next" == threadOut2:nextmsg())
     startT = mtmsg.time()
+    reader:nextmsg(listener)
     for i = 1, N do 
-        local i2, a, b, c, d = threadOut:nextmsg()
+        local i2, a, b, c, d = reader:next(5)
         assert(i2 == i)
         local obj = objects[i]
         if not obj then

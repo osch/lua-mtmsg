@@ -63,6 +63,7 @@ script:
   - lua test09.lua
   - lua test10.lua
   - lua test11.lua
+  - lua test12.lua
 
 notifications:
   email:

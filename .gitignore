@@ -1,5 +1,6 @@
 /build
-/sandbox.mk
+/src/sandbox.mk
+/tests/*out
 *.o
 *.so
 *.dll

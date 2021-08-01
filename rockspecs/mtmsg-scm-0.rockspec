@@ -26,13 +26,6 @@ build = {
           libraries = {"pthread"},
         }
       }
-    },
-    windows = {
-      modules = {
-        mtmsg = {
-          libraries = {"kernel32"},
-        }
-      }
     }
   },
   modules = {

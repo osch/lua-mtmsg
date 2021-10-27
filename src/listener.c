@@ -410,8 +410,8 @@ int mtmsg_listener_next_msg(lua_State* L, ListenerUserData* listenerUdata, int a
 
     lua_Number endTime   = 0; /* 0 = no timeout */
 
-    if (lua_gettop(L) >= arg) {
-        lua_Number waitSeconds = luaL_checknumber(L, arg++);
+    if (!lua_isnoneornil(L, arg)) {
+        lua_Number waitSeconds = luaL_checknumber(L, arg);
         endTime = mtmsg_current_time_seconds() + waitSeconds;
     }
 

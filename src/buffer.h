@@ -3,6 +3,7 @@
 
 #include "util.h"
 #include "listener.h"
+#include "notify_capi.h"
 
 extern const char* const MTMSG_BUFFER_CLASS_NAME;;
 
@@ -17,6 +18,8 @@ typedef struct MsgBuffer {
     Mutex*             sharedMutex;
     Mutex              ownMutex;
     MemBuffer          mem;
+    const notify_capi* notifyapi;
+    notify_notifier*   notifier;
     
     struct MsgListener* listener;          
     struct MsgBuffer*   nextListenerBuffer;
@@ -38,6 +41,8 @@ struct ListenerUserData;
 
 int mtmsg_buffer_new(lua_State* L, struct ListenerUserData* listenerUdata, int arg);
 
+void mtmsg_free_buffer(MsgBuffer* b);
+
 const char* mtmsg_buffer_tostring(lua_State* L, MsgBuffer* q);
 
 int mtmsg_buffer_init_module(lua_State* L, int module);
@@ -46,7 +51,7 @@ void mtmsg_buffer_abort_all(bool abortFlag);
 
 void mtmsg_buffer_free_unreachable(MsgListener* listener, MsgBuffer* b);
 
-bool mtmsg_buffer_set_or_add_msg(lua_State* L, BufferUserData* udata, bool clear, int arg, const char* args, size_t args_size);
+int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, bool nonblock, bool clear, int arg, const char* args, size_t args_size);
 
 int mtmsg_buffer_next_msg(lua_State* L, BufferUserData* udata, int arg, MemBuffer* resultBuffer, size_t* argsSize);
 

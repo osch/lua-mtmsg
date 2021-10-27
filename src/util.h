@@ -78,12 +78,24 @@ bool mtmsg_membuf_init(MemBuffer* b, size_t initialCapacity, lua_Number growFact
 
 void mtmsg_membuf_free(MemBuffer* b);
 
+int mtmsg_membuf_reserve0(MemBuffer* b, size_t newLength);
+
 /**
  *  0 : ok
  * -1 : buffer should not grow
  * -2 : buffer can   not grow
  */
-int mtmsg_membuf_reserve(MemBuffer* b, size_t additionalLength);
+static inline int mtmsg_membuf_reserve(MemBuffer* b, size_t additionalLength)
+{
+    size_t newLength = b->bufferLength + additionalLength;
+    
+    if (b->bufferStart - b->bufferData + newLength > b->bufferCapacity) 
+    {
+        return mtmsg_membuf_reserve0(b, newLength);
+    } else {
+        return 0;
+    }
+}
 
 
 void mtmsg_util_quote_lstring(lua_State* L, const char* s, size_t len);

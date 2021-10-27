@@ -51,39 +51,34 @@ void mtmsg_membuf_free(MemBuffer* b)
  * -1 : buffer should not grow
  * -2 : buffer can   not grow
  */
-int mtmsg_membuf_reserve(MemBuffer* b, size_t additionalLength)
+int mtmsg_membuf_reserve0(MemBuffer* b, size_t newLength)
 {
-    size_t newLength = b->bufferLength + additionalLength;
-    
-    if (b->bufferStart - b->bufferData + newLength > b->bufferCapacity) 
-    {
-        memmove(b->bufferData, b->bufferStart, b->bufferLength);
-        b->bufferStart = b->bufferData;
+    memmove(b->bufferData, b->bufferStart, b->bufferLength);
+    b->bufferStart = b->bufferData;
 
-        if (newLength > b->bufferCapacity) {
+    if (newLength > b->bufferCapacity) {
+        if (b->bufferData == NULL) {
+            size_t newCapacity = 2 * (newLength);
+            b->bufferData = malloc(newCapacity);
             if (b->bufferData == NULL) {
-                size_t newCapacity = 2 * (newLength);
-                b->bufferData = malloc(newCapacity);
-                if (b->bufferData == NULL) {
-                    return -2;
-                }
-                b->bufferStart    = b->bufferData;
-                b->bufferCapacity = newCapacity;
-            } else if (b->growFactor > 0) {
-                size_t newCapacity = b->bufferCapacity * b->growFactor;
-                if (newCapacity < newLength) {
-                    newCapacity = newLength;
-                }
-                char* newData = realloc(b->bufferData, newCapacity);
-                if (newData == NULL) {
-                    return -2;
-                }
-                b->bufferData     = newData;
-                b->bufferStart    = newData;
-                b->bufferCapacity = newCapacity;
-            } else {
-                return -1;
+                return -2;
             }
+            b->bufferStart    = b->bufferData;
+            b->bufferCapacity = newCapacity;
+        } else if (b->growFactor > 0) {
+            size_t newCapacity = b->bufferCapacity * b->growFactor;
+            if (newCapacity < newLength) {
+                newCapacity = newLength;
+            }
+            char* newData = realloc(b->bufferData, newCapacity);
+            if (newData == NULL) {
+                return -2;
+            }
+            b->bufferData     = newData;
+            b->bufferStart    = newData;
+            b->bufferCapacity = newCapacity;
+        } else {
+            return -1;
         }
     }
     return 0;

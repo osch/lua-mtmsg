@@ -94,6 +94,7 @@ assert(lst:nextmsg(0) == nil)
        * buffer:setmsg()
        * buffer:clear()
        * buffer:nextmsg()
+       * buffer:notifier()
        * buffer:nonblock()
        * buffer:isnonblock()
        * buffer:close()
@@ -299,7 +300,7 @@ assert(lst:nextmsg(0) == nil)
 * **`buffer:addmsg(...)`**
 
   Adds the arguments together as one message to the buffer. Arguments can be
-  simple data types (string, number, boolean, nil, light user data).
+  simple data types (string, number, boolean, nil, light user data, C function).
   
   Returns *true* if the message could be added to the buffer. 
   
@@ -318,7 +319,7 @@ assert(lst:nextmsg(0) == nil)
 
   Sets the arguments together as one message into the buffer. All other messages
   in this buffer are discarded. Arguments can be simple data types 
-  (string, number, boolean, light user data).
+  (string, number, boolean, light user data, C function).
   
   Returns *true* if the message could be set into the buffer.
   
@@ -355,13 +356,35 @@ assert(lst:nextmsg(0) == nil)
   If no timeout is given and *buffer:isnonblock() == false* then this methods waits
   without timeout limit until a next message becomes available.
 
-  If no timeout is given and *buffer:isnonblock() == true* then this methods
+  If no timeout is given and *buffer:isnonblock() == true* then this method
   returns immediately without result if no next message is available or if the
   buffer is concurrently accessed from another thread.
 
   Possible errors: *mtmsg.error.object_closed*,
                    *mtmsg.error.operation_aborted*
 
+
+* **`buffer:notifier(ntf)`**
+
+  Connects a notifier object to the underlying buffer.
+  
+  * *ntf* notifier object or *nil*. If *nil* is given, an existing notifier 
+          object is disconnected from the underlying buffer.
+  
+  A connected notifier object is always called if a message is added to the 
+  underlying buffer.
+  
+  The given notifier object must implement the *Notify C API*, 
+  see [src/notify_capi.h](./src/notify_capi.h), i.e. the given object must
+  have an an associated meta table entry *_capi_notify* delivered by
+  the C API function *notify_get_capi()* and the associated 
+  C API function *toNotifier()* must return a valid pointer for the given 
+  notifier object *ntf*.
+  
+  Example: see [lua-lpugl/example/example10.lua](https://github.com/osch/lua-lpugl/blob/master/example/example10.lua)
+
+  Possible errors: *mtmsg.error.object_closed*,
+                   *mtmsg.error.has_notifier*
 
 * **`buffer:nonblock([flag])`**
 
@@ -531,7 +554,7 @@ is equivalent to
 * **`writer:add(...)`**
 
   Adds the arguments as message elements into the writer. Arguments can be
-  simple data types (string, number, boolean, nil, light user data).
+  simple data types (string, number, boolean, nil, light user data, C function).
   
   Possible errors: *mtmsg.error.message_size*
 
@@ -595,7 +618,7 @@ is equivalent to
 
 * **`reader:next([count])`**
 
-  Returns next message elements from the reader. Returns *nil* If no more message elements 
+  Returns next message elements from the reader. Returns nothing no more message elements 
   are available. The returned elements are removed from the reader's internal list of message
   elements.
 
@@ -675,6 +698,11 @@ is equivalent to
   Buffers are subject to garbage collection and therefore a reference to a created
   buffer is needed to keep it alive. If a listener's buffer becomes garbage
   collected, it is disconnected from the listener.
+
+* **`mtmsg.error.has_notifier`**
+
+  The method *buffer:notifier()* is called with a notifier object but the underlying
+  buffer already has notifier object.
 
 * **`mtmsg.error.object_closed`**
 

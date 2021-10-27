@@ -28,7 +28,7 @@ LOPTS       :=
 # (may be set in sandbox.mk)
 
 PLATFORM    := LNX
-LUA_VERSION := 5.3
+LUA_VERSION := 5.4
 
 -include sandbox.mk
 
@@ -43,7 +43,7 @@ mtmsg:
 	    -D MTMSG_VERSION=Makefile"-$(BUILD_DATE)" \
 	    main.c         buffer.c       listener.c   writer.c \
 	    reader.c       serialize.c    error.c      util.c   \
-	    async_util.c   mtmsg_compat.c \
+	    async_util.c   mtmsg_compat.c capi_impl.c \
 	    $(LOPTS) \
 	    -o build/lua$(LUA_VERSION)/mtmsg.$(SO_EXT)
 	    

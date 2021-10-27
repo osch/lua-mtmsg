@@ -1,19 +1,8 @@
 #include "serialize.h"
 
-typedef enum {
-    BUFFER_NIL,
-    BUFFER_INTEGER,
-    BUFFER_BYTE,
-    BUFFER_NUMBER,
-    BUFFER_BOOLEAN,
-    BUFFER_STRING,
-    BUFFER_SMALLSTRING,
-    BUFFER_LIGHTUSERDATA
-} SerializeDataType;
-
 size_t mtmsg_serialize_calc_args_size(lua_State* L, int firstArg, int* errorArg)
 {
-    size_t rslt = 0;
+    size_t rslt = MTMSG_ARG_SIZE_INITIAL;
     int n = lua_gettop(L);
     int i;
     for (i = firstArg; i <= n; ++i)
@@ -21,42 +10,39 @@ size_t mtmsg_serialize_calc_args_size(lua_State* L, int firstArg, int* errorArg)
         int type = lua_type(L, i);
         switch (type) {
             case LUA_TNIL: {
-                rslt += 1; 
+                rslt += MTMSG_ARG_SIZE_NIL; 
                 break;
             }
             case LUA_TNUMBER:  {
                 if (lua_isinteger(L, i)) {
                     lua_Integer value = lua_tointeger(L, i);
-                    if (0 <= value && value <= 0xff) {
-                        rslt += 1 + 1;
-                    } else {
-                        rslt += 1 + sizeof(lua_Integer);
-                    }
+                    rslt += mtmsg_serialize_calc_integer_size(value);
                 } else {
-                    rslt += 1 + sizeof(lua_Number);
+                    rslt += MTMSG_ARG_SIZE_NUMBER;
                 }
                 break;
             }
             case LUA_TBOOLEAN: {
-                rslt += 2; 
+                rslt += MTMSG_ARG_SIZE_BOOLEAN; 
                 break;
             }
             case LUA_TSTRING: {
                 size_t len = 0;
                 lua_tolstring(L, i, &len);
-                if (len <= 0xff) {
-                    rslt += 1 + 1 + len;
-                } else {
-                    rslt += 1 + sizeof(size_t) + len;
-                }
+                rslt += mtmsg_serialize_calc_string_size(len);
                 break;
             }
             case LUA_TLIGHTUSERDATA: {
-                rslt += 1 + sizeof(void*);
+                rslt += MTMSG_ARG_SIZE_LIGHTUSERDATA;
                 break;
             }
+            case LUA_TFUNCTION: {
+                if (lua_iscfunction(L, i)) {
+                    rslt += MTMSG_ARG_SIZE_CFUNCTION;
+                    break;
+                }
+            } /* FALLTHROUGH */
             case LUA_TTABLE:
-            case LUA_TFUNCTION:
             case LUA_TUSERDATA:
             case LUA_TTHREAD:
             default: {
@@ -70,7 +56,6 @@ size_t mtmsg_serialize_calc_args_size(lua_State* L, int firstArg, int* errorArg)
 
 void mtmsg_serialize_args_to_buffer(lua_State* L, int firstArg, char* buffer)
 {
-    size_t p = 0;
     int    n = lua_gettop(L);
     int    i;
 
@@ -79,54 +64,40 @@ void mtmsg_serialize_args_to_buffer(lua_State* L, int firstArg, char* buffer)
         int type = lua_type(L, i);
         switch (type) {
             case LUA_TNIL: {
-                buffer[p++] = BUFFER_NIL;
+                *buffer++ = BUFFER_NIL;
                 break;
             }
             case LUA_TNUMBER:  {
                 if (lua_isinteger(L, i)) {
                     lua_Integer value = lua_tointeger(L, i);
-                    if (0 <= value && value <= 0xff) {
-                        buffer[p++] = BUFFER_BYTE;
-                        buffer[p++] = ((char)value);
-                    } else {
-                        buffer[p++] = BUFFER_INTEGER;
-                        memcpy(buffer + p, &value, sizeof(lua_Integer));
-                        p += sizeof(lua_Integer);
-                    }
+                    buffer = mtmsg_serialize_integer_to_buffer(value, buffer);
                 } else {
-                    buffer[p++] = BUFFER_NUMBER;
                     lua_Number value = lua_tonumber(L, i);
-                    memcpy(buffer + p, &value, sizeof(lua_Number));
-                    p += sizeof(lua_Number);
+                    buffer = mtmsg_serialize_number_to_buffer(value, buffer);
                 }
                 break;
             }
             case LUA_TBOOLEAN: {
-                buffer[p++] = BUFFER_BOOLEAN;
-                buffer[p++] = lua_toboolean(L, i);
+                buffer = mtmsg_serialize_boolean_to_buffer(lua_toboolean(L, i), buffer);
                 break;
             }
             case LUA_TSTRING: {
                 size_t      len     = 0;
                 const char* content = lua_tolstring(L, i, &len);
-                if (len <= 0xff) {
-                    buffer[p++] = BUFFER_SMALLSTRING;
-                    buffer[p++] = ((char)len);
-                } else {
-                    buffer[p++] = BUFFER_STRING;
-                    memcpy(buffer + p, &len, sizeof(size_t));
-                    p += sizeof(size_t);
-                }
-                memcpy(buffer + p, content, len);
-                p += len;
+                buffer = mtmsg_serialize_string_to_buffer(content, len, buffer);
                 break;
             }
             case LUA_TLIGHTUSERDATA: {
                 void* value = lua_touserdata(L, i);
-                buffer[p++] = BUFFER_LIGHTUSERDATA;
-                memcpy(buffer + p, &value, sizeof(void*));
-                p += sizeof(void*);
+                buffer = mtmsg_serialize_lightuserdata_to_buffer(value, buffer);
                 break;
+            }
+            case LUA_TFUNCTION: {
+                lua_CFunction func = lua_tocfunction(L, i);
+                if (func) {
+                    buffer = mtmsg_serialize_cfunction_to_buffer(func, buffer);
+                    break;
+                }
             }
             default: {
                 break;
@@ -211,6 +182,13 @@ int mtmsg_serialize_get_msg_args2(lua_State* L, GetMsgArgsPar* par)
                 memcpy(&value, buffer + p, sizeof(void*));
                 p += sizeof(void*);
                 lua_pushlightuserdata(L, value);
+                break;
+            }
+            case BUFFER_CFUNCTION: {
+                lua_CFunction value = NULL;
+                memcpy(&value, buffer + p, sizeof(lua_CFunction));
+                p += sizeof(lua_CFunction);
+                lua_pushcfunction(L, value);
                 break;
             }
             default: {

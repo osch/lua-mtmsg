@@ -9,6 +9,7 @@ static const char* const MTMSG_ERROR_OBJECT_CLOSED     = "object_closed";
 static const char* const MTMSG_ERROR_OPERATION_ABORTED = "operation_aborted";
 static const char* const MTMSG_ERROR_MESSAGE_SIZE      = "message_size";
 static const char* const MTMSG_ERROR_OUT_OF_MEMORY     = "out_of_memory";
+static const char* const MTMSG_ERROR_HAS_NOTIFIER      = "has_notifier";
 
 
 typedef struct Error {
@@ -101,6 +102,11 @@ int mtmsg_ERROR_OBJECT_CLOSED(lua_State* L, const char* objectString)
 int mtmsg_ERROR_OPERATION_ABORTED(lua_State* L)
 {
     return throwError(L, MTMSG_ERROR_OPERATION_ABORTED);
+}
+
+int mtmsg_MTMSG_ERROR_HAS_NOTIFIER(lua_State* L)
+{
+    return throwError(L, MTMSG_ERROR_HAS_NOTIFIER);
 }
 
 int mtmsg_ERROR_OUT_OF_MEMORY(lua_State* L)

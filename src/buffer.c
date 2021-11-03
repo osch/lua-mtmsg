@@ -1,3 +1,5 @@
+#define NOTIFY_CAPI_IMPLEMENT_GET_CAPI 1
+
 #include "buffer.h"
 #include "listener.h"
 #include "serialize.h"
@@ -334,8 +336,9 @@ static void freeBuffer2(MsgBuffer* b)
     if (b->bufferName) {
         free(b->bufferName);
     }
-    if (b->notifier) {
-        b->notifyapi->releaseNotifier(b->notifier);
+    if (b->notifierHolder && atomic_dec(&b->notifierHolder->used) <= 0) {
+        b->notifierHolder->notifyapi->releaseNotifier(b->notifierHolder->notifier);
+        free(b->notifierHolder);
     }
     mtmsg_membuf_free(&b->mem);
     free(b);
@@ -544,6 +547,46 @@ static int MsgBuffer_clear(lua_State* L)
 }
 
 
+typedef struct notify_error_handler_data notify_error_handler_data;
+struct notify_error_handler_data {
+    char*  buffer;
+    size_t len;
+};
+
+static void notify_error_handler(void* ehdata, const char* msg, size_t msglen)
+{
+    notify_error_handler_data* e = (notify_error_handler_data*)ehdata;
+
+    static const char prefix[] = "Error while calling notifier: ";
+    static const size_t preflen = sizeof(prefix) - 1;
+
+    if (!e->buffer) {
+        e->buffer = malloc(preflen + msglen + 1);
+        if (e->buffer) {
+            memcpy(e->buffer, prefix, preflen);
+            memcpy(e->buffer + preflen, msg, msglen);
+            e->buffer[preflen + msglen] = '\0';
+            e->len = preflen + msglen;
+        }
+    } else {
+        char* newB = realloc(e->buffer, e->len + 1 + msglen + 1);
+        if (newB) {
+            e->buffer = newB;
+            e->buffer[e->len] = '\n';
+            memcpy(e->buffer + e->len + 1, msg, msglen);
+            e->buffer[e->len + 1 + msglen] = '\0';
+            e->len += 1 + msglen;
+        }
+    }
+}
+
+static int pushNotifyErrorMessage(lua_State* L)
+{
+    notify_error_handler_data* ehdata = lua_touserdata(L, 1);
+    lua_pushlstring(L, ehdata->buffer, ehdata->len);
+    return 1;
+}
+
 
 int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, bool nonblock, bool clear, int arg, const char* args, size_t args_size)
 {
@@ -627,13 +670,57 @@ int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, bool nonblock, bool 
         mtmsg_buffer_add_to_ready_list(b->listener, b);
     }
 
-    if (b->notifier) {
-        b->notifyapi->notify(b->notifier);
+    NotifierHolder* notifierHolder = b->notifierHolder;
+    if (notifierHolder) {
+        atomic_inc(&notifierHolder->used);
     }
     
     async_mutex_notify(b->sharedMutex);
     async_mutex_unlock(b->sharedMutex);
     
+    if (notifierHolder) {
+        if (L) {
+            luaL_checkstack(L, 10, NULL);
+        }
+        notify_error_handler_data ehdata = { NULL, 0 };
+        int rc = notifierHolder->notifyapi->notify(notifierHolder->notifier, 
+                                                   notify_error_handler, &ehdata);
+        if (rc == 1) {
+            // notifier should not be called again
+            async_mutex_lock(b->sharedMutex);
+            if (b->notifierHolder == notifierHolder) {
+                atomic_dec(&notifierHolder->used);
+                b->notifierHolder = NULL;
+            }
+            async_mutex_unlock(b->sharedMutex);
+        }
+        if (atomic_dec(&notifierHolder->used) <= 0) {
+            notifierHolder->notifyapi->releaseNotifier(notifierHolder->notifier);
+            free(notifierHolder);
+        }
+        bool isError = (rc != 0 && rc != 1);
+        if (ehdata.buffer) {
+            if (L && isError) {
+                lua_pushcfunction(L, pushNotifyErrorMessage);
+                lua_pushlightuserdata(L, &ehdata);
+                lua_pcall(L, 1, 1, 0);
+                free(ehdata.buffer);
+                return lua_error(L);
+            } else {
+                free(ehdata.buffer);
+                if (isError) {
+                    return 999;
+                }
+            }
+        } else if (isError) {
+            if (L) {
+                return luaL_error(L, "Unknown error while calling notifier. (rc=%d)", rc);
+            }
+            else {
+                return 999;
+            }
+        }
+    }
     return 0;
 }
 
@@ -829,9 +916,12 @@ static int Mtmsg_notifier(lua_State* L)
         else if (versErr) {
             return luaL_argerror(L, arg, "notifier api version mismatch");
         }
+        else if (lua_type(L, arg) != LUA_TNIL) {
+            return luaL_argerror(L, arg, "notifier expected");
+        }
     }
     else {
-        return luaL_argerror(L, arg, "notifier expected");
+        return luaL_argerror(L, arg, "notifier or nil expected");
     }
     async_mutex_lock(b->sharedMutex);
     {
@@ -840,19 +930,30 @@ static int Mtmsg_notifier(lua_State* L)
             const char* qstring = mtmsg_buffer_tostring(L, b);
             return mtmsg_ERROR_OBJECT_CLOSED(L, qstring);
         }
-        else if (b->notifier && notifier) {
+        else if (b->notifierHolder && notifier) {
             async_mutex_unlock(b->sharedMutex);
             return mtmsg_MTMSG_ERROR_HAS_NOTIFIER(L);
         }
-        else if (b->notifier) {
-            b->notifyapi->releaseNotifier(b->notifier);
-            b->notifyapi = NULL;
-            b->notifier  = NULL;
+        else if (b->notifierHolder) {
+            if (atomic_dec(&b->notifierHolder->used) <= 0) {
+                b->notifierHolder->notifyapi->releaseNotifier(b->notifierHolder->notifier);
+                free(b->notifierHolder);
+            }
+            b->notifierHolder = NULL;
         }
         else if (notifier) {
+            NotifierHolder* notifierHolder = calloc(1, sizeof(NotifierHolder));
+            if (!notifierHolder) {
+                async_mutex_unlock(b->sharedMutex);
+                return mtmsg_ERROR_OUT_OF_MEMORY(L);
+            }
+            notifierHolder->used      = 1;
+            notifierHolder->notifier  = notifier;
+            notifierHolder->notifyapi = notifyapi;
+
+            b->notifierHolder = notifierHolder;
+
             notifyapi->retainNotifier(notifier);
-            b->notifyapi = notifyapi;
-            b->notifier  = notifier;
         }
     }
     async_mutex_unlock(b->sharedMutex);

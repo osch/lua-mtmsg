@@ -7,6 +7,12 @@
 
 extern const char* const MTMSG_BUFFER_CLASS_NAME;;
 
+typedef struct NotifierHolder {
+    AtomicCounter      used;
+    const notify_capi* notifyapi;
+    notify_notifier*   notifier;
+} NotifierHolder;
+
 typedef struct MsgBuffer {
     lua_Integer        id;
     AtomicCounter      used;
@@ -18,8 +24,7 @@ typedef struct MsgBuffer {
     Mutex*             sharedMutex;
     Mutex              ownMutex;
     MemBuffer          mem;
-    const notify_capi* notifyapi;
-    notify_notifier*   notifier;
+    NotifierHolder*    notifierHolder;
     
     struct MsgListener* listener;          
     struct MsgBuffer*   nextListenerBuffer;

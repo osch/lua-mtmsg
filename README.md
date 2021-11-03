@@ -374,6 +374,9 @@ assert(lst:nextmsg(0) == nil)
   A connected notifier object is always called if a message is added to the 
   underlying buffer.
   
+  A buffer can only have one connected notifier object. It is an error to call 
+  this method in case the buffer already has a connected notifier object.
+  
   The given notifier object must implement the *Notify C API*, 
   see [src/notify_capi.h](./src/notify_capi.h), i.e. the given object must
   have an an associated meta table entry *_capi_notify* delivered by
@@ -381,7 +384,9 @@ assert(lst:nextmsg(0) == nil)
   C API function *toNotifier()* must return a valid pointer for the given 
   notifier object *ntf*.
   
-  Example: see [lua-lpugl/example/example10.lua](https://github.com/osch/lua-lpugl/blob/master/example/example10.lua)
+  Examples:
+  * [lua-lpugl/example/example10.lua](https://github.com/osch/lua-lpugl/blob/master/example/example10.lua)
+  * [lua-mtstates/examples/example06.lua](https://github.com/osch/lua-mtstates/blob/master/examples/example06.lua)
 
   Possible errors: *mtmsg.error.object_closed*,
                    *mtmsg.error.has_notifier*

@@ -1,0 +1,52 @@
+name: test
+
+on: [push]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        luaVersion: ["5.1", "5.2", "5.3", "5.4", "luajit"]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@master
+
+    - uses: leafo/gh-actions-lua@master
+      with:
+        luaVersion: ${{ matrix.luaVersion }}
+
+    - uses: leafo/gh-actions-luarocks@master
+
+    - name: setup 
+      run: |
+        luarocks install lua-llthreads2
+        luarocks make rockspecs/mtmsg-scm-0.rockspec
+
+    - name: test
+      run: |
+        set -e
+        lua -v
+        cd tests
+        lua test01.lua
+        lua test02.lua
+        lua test03.lua
+        lua test04.lua
+        lua test05.lua
+        lua test06.lua
+        lua test07.lua
+        lua test08.lua
+        lua test09.lua
+        lua test10.lua
+        lua test11.lua
+        lua test12.lua
+        cd ../examples
+        lua example01.lua
+        lua example02.lua
+        lua example03.lua
+        lua example04.lua
+        lua example05.lua
+     

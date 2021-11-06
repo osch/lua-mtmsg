@@ -4,6 +4,7 @@
 #include "util.h"
 #include "listener.h"
 #include "notify_capi.h"
+#include "receiver_capi.h"
 
 extern const char* const MTMSG_BUFFER_CLASS_NAME;;
 
@@ -56,7 +57,7 @@ void mtmsg_buffer_abort_all(bool abortFlag);
 
 void mtmsg_buffer_free_unreachable(MsgListener* listener, MsgBuffer* b);
 
-int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, bool nonblock, bool clear, int arg, const char* args, size_t args_size);
+int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, bool nonblock, bool clear, int arg, const char* args, size_t args_size, receiver_error_handler eh, void* ehdata);
 
 int mtmsg_buffer_next_msg(lua_State* L, BufferUserData* udata, int arg, MemBuffer* resultBuffer, size_t* argsSize);
 

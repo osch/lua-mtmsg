@@ -160,5 +160,5 @@ static inline void mtmsg_serialize_parse_header(const char* buffer, SerializedMs
     }
 }
 
-#endif // MTMSG_SERIALIZE_H
+#endif /* MTMSG_SERIALIZE_H */
 

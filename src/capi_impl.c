@@ -3,12 +3,12 @@
 #include "main.h"
 #include "serialize.h"
 
-struct mtmsg_writer
+struct receiver_writer
 {
     MemBuffer mem;
 };
 
-static mtmsg_buffer* toBuffer(lua_State* L, int index)
+static receiver_object* toReceiver(lua_State* L, int index)
 {
     void* buffer = lua_touserdata(L, index);
     if (buffer) {
@@ -29,7 +29,7 @@ static mtmsg_buffer* toBuffer(lua_State* L, int index)
     return buffer;
 }
 
-static void retainBuffer(mtmsg_buffer* buffer)
+static void retainReceiver(receiver_object* buffer)
 {
     MsgBuffer* b = (MsgBuffer*)buffer;
     async_mutex_lock(mtmsg_global_lock);
@@ -38,7 +38,7 @@ static void retainBuffer(mtmsg_buffer* buffer)
 }
 
 
-static void releaseBuffer(mtmsg_buffer* buffer)
+static void releaseReceiver(receiver_object* buffer)
 {
     MsgBuffer* b = (MsgBuffer*)buffer;
     async_mutex_lock(mtmsg_global_lock);
@@ -48,9 +48,9 @@ static void releaseBuffer(mtmsg_buffer* buffer)
     async_mutex_unlock(mtmsg_global_lock);
 }
 
-static mtmsg_writer* newWriter(size_t initialCapacity, float growFactor)
+static receiver_writer* newWriter(size_t initialCapacity, float growFactor)
 {
-    mtmsg_writer* writer = malloc(sizeof(mtmsg_writer));
+    receiver_writer* writer = malloc(sizeof(receiver_writer));
     if (writer) {
         if (!mtmsg_membuf_init(&writer->mem, initialCapacity, growFactor)) {
             free(writer);
@@ -59,20 +59,20 @@ static mtmsg_writer* newWriter(size_t initialCapacity, float growFactor)
     }
     return writer;
 }
-static void freeWriter(mtmsg_writer* writer)
+static void freeWriter(receiver_writer* writer)
 {
     if (writer) {
         mtmsg_membuf_free(&writer->mem);
     }
 }
 
-static void clearWriter(mtmsg_writer* writer)
+static void clearWriter(receiver_writer* writer)
 {
     writer->mem.bufferStart  = writer->mem.bufferData;
     writer->mem.bufferLength = 0;
 }
 
-static int addBooleanToWriter(mtmsg_writer* writer, int value)
+static int addBooleanToWriter(receiver_writer* writer, int value)
 {
     size_t args_size = MTMSG_ARG_SIZE_BOOLEAN;
     int rc = mtmsg_membuf_reserve(&writer->mem, args_size);
@@ -83,7 +83,7 @@ static int addBooleanToWriter(mtmsg_writer* writer, int value)
     return rc;
 }
 
-static int addIntegerToWriter(mtmsg_writer* writer, lua_Integer value)
+static int addIntegerToWriter(receiver_writer* writer, lua_Integer value)
 {
     size_t args_size = mtmsg_serialize_calc_integer_size(value);
     int rc = mtmsg_membuf_reserve(&writer->mem, args_size);
@@ -94,7 +94,7 @@ static int addIntegerToWriter(mtmsg_writer* writer, lua_Integer value)
     return rc;
 }
 
-static int addNumberToWriter(mtmsg_writer* writer, lua_Number value)
+static int addNumberToWriter(receiver_writer* writer, lua_Number value)
 {
     size_t args_size = MTMSG_ARG_SIZE_NUMBER;
     int rc = mtmsg_membuf_reserve(&writer->mem, args_size);
@@ -105,7 +105,7 @@ static int addNumberToWriter(mtmsg_writer* writer, lua_Number value)
     return rc;
 }
 
-static int addStringToWriter(mtmsg_writer* writer, const char* value, size_t len)
+static int addStringToWriter(receiver_writer* writer, const char* value, size_t len)
 {
     size_t args_size = mtmsg_serialize_calc_string_size(len);
     int rc = mtmsg_membuf_reserve(&writer->mem, args_size);
@@ -116,36 +116,42 @@ static int addStringToWriter(mtmsg_writer* writer, const char* value, size_t len
     return rc;
 }
 
-static int addMsgToBuffer(mtmsg_buffer* buffer, mtmsg_writer* writer)
+static int addMsgToReceiver(receiver_object* buffer, receiver_writer* writer, receiver_error_handler eh, void* ehdata)
 {
     MsgBuffer* b  = (MsgBuffer*)buffer;
     bool nonblock = false;
     bool clear    = false;
-    int rc = mtmsg_buffer_set_or_add_msg(NULL, b, nonblock, clear, 0, writer->mem.bufferStart, writer->mem.bufferLength);
+    int rc = mtmsg_buffer_set_or_add_msg(NULL, b, nonblock, clear, 0, writer->mem.bufferStart, writer->mem.bufferLength, eh, ehdata);
+    if (rc == 0) {
+        writer->mem.bufferLength = 0;
+    }
     return rc;
 }
 
-static int setMsgToBuffer(mtmsg_buffer* buffer, mtmsg_writer* writer)
+static int setMsgToReceiver(receiver_object* buffer, receiver_writer* writer, receiver_error_handler eh, void* ehdata)
 {
     MsgBuffer* b  = (MsgBuffer*)buffer;
     bool nonblock = false;
     bool clear    = true;
-    int rc = mtmsg_buffer_set_or_add_msg(NULL, b, nonblock, clear, 0, writer->mem.bufferStart, writer->mem.bufferLength);
+    int rc = mtmsg_buffer_set_or_add_msg(NULL, b, nonblock, clear, 0, writer->mem.bufferStart, writer->mem.bufferLength, eh, ehdata);
+    if (rc == 0) {
+        writer->mem.bufferLength = 0;
+    }
     return rc;
 }
 
-const mtmsg_capi mtmsg_capi_impl =
+const receiver_capi mtmsg_receiver_capi_impl =
 {
-    MTMSG_CAPI_VERSION_MAJOR,
-    MTMSG_CAPI_VERSION_MINOR,
-    MTMSG_CAPI_VERSION_PATCH,
+    RECEIVER_CAPI_VERSION_MAJOR,
+    RECEIVER_CAPI_VERSION_MINOR,
+    RECEIVER_CAPI_VERSION_PATCH,
     
-    NULL, // next_capi
+    NULL, /* next_capi */
     
-    toBuffer,
+    toReceiver,
 
-    retainBuffer,
-    releaseBuffer,
+    retainReceiver,
+    releaseReceiver,
 
     newWriter,
     freeWriter,
@@ -155,6 +161,6 @@ const mtmsg_capi mtmsg_capi_impl =
     addIntegerToWriter,
     addStringToWriter,
 
-    addMsgToBuffer,
-    setMsgToBuffer
+    addMsgToReceiver,
+    setMsgToReceiver
 };

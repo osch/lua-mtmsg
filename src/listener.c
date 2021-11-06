@@ -529,7 +529,7 @@ static int MsgListener_nextMsg(lua_State* L)
     ListenerUserData* udata = luaL_checkudata(L, arg++, MTMSG_LISTENER_CLASS_NAME);
     
     int parsedArgCount = mtmsg_listener_next_msg(L, udata, arg, NULL, NULL);
-    return parsedArgCount; // parsedArgCount because resultBuffer is NULL
+    return parsedArgCount; /* parsedArgCount because resultBuffer is NULL */
 }
 
 

@@ -251,12 +251,12 @@ DLL_PUBLIC int luaopen_mtmsg(lua_State* L)
     mtmsg_reader_init_module  (L, module);
     mtmsg_error_init_module   (L, errorModule);
     
-    lua_newtable(L);                                   /* -> meta */
-    lua_pushlightuserdata(L, (void*)&mtmsg_capi_impl); /* -> meta, capi */
-    lua_setfield(L, -2, "_capi_mtmsg");                /* -> meta */
-    lua_pushstring(L, "mtmsg");                        /* -> meta, "mtmsg" */
-    lua_setfield(L, -2, "__metatable");                /* -> meta */
-    lua_setmetatable(L, module);                       /* -> */
+    lua_newtable(L);                                            /* -> meta */
+    lua_pushlightuserdata(L, (void*)&mtmsg_receiver_capi_impl); /* -> meta, capi */
+    lua_setfield(L, -2, "_capi_mtmsg_receiver");                /* -> meta */
+    lua_pushstring(L, "mtmsg");                                 /* -> meta, "mtmsg" */
+    lua_setfield(L, -2, "__metatable");                         /* -> meta */
+    lua_setmetatable(L, module);                                /* -> */
     
     lua_settop(L, module);
     return 1;

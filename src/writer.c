@@ -107,7 +107,7 @@ static int Writer_addMsg(lua_State* L)
     WriterUserData* wudata = luaL_checkudata(L, arg++, MTMSG_WRITER_CLASS_NAME);
     BufferUserData* budata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
     bool clear = false;
-    int rc = mtmsg_buffer_set_or_add_msg(L, budata->buffer, budata->nonblock, clear, 0, wudata->mem.bufferStart, wudata->mem.bufferLength);
+    int rc = mtmsg_buffer_set_or_add_msg(L, budata->buffer, budata->nonblock, clear, 0, wudata->mem.bufferStart, wudata->mem.bufferLength, NULL, NULL);
     if (rc == 0) {
         wudata->mem.bufferLength = 0;
     }
@@ -121,7 +121,7 @@ static int Writer_setMsg(lua_State* L)
     WriterUserData* wudata = luaL_checkudata(L, arg++, MTMSG_WRITER_CLASS_NAME);
     BufferUserData* budata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
     bool clear = true;
-    int rc = mtmsg_buffer_set_or_add_msg(L, budata->buffer, budata->nonblock, clear, 0, wudata->mem.bufferStart, wudata->mem.bufferLength);
+    int rc = mtmsg_buffer_set_or_add_msg(L, budata->buffer, budata->nonblock, clear, 0, wudata->mem.bufferStart, wudata->mem.bufferLength, NULL, NULL);
     if (rc == 0) {
         wudata->mem.bufferLength = 0;
     }

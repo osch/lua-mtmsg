@@ -106,7 +106,7 @@ void mtmsg_util_quote_lstring(lua_State* L, const char* s, size_t len)
         luaL_addchar(&tmp, '"');
         luaL_pushresult(&tmp);
     } else {
-        lua_pushstring(L, "nil");
+        lua_pushstring(L, "(nil)");
     }
 }
 

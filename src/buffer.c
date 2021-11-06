@@ -553,9 +553,9 @@ struct notify_error_handler_data {
     size_t len;
 };
 
-static void notify_error_handler(void* ehdata, const char* msg, size_t msglen)
+static void notify_error_handler(void* notify_ehdata, const char* msg, size_t msglen)
 {
-    notify_error_handler_data* e = (notify_error_handler_data*)ehdata;
+    notify_error_handler_data* e = (notify_error_handler_data*)notify_ehdata;
 
     static const char prefix[] = "Error while calling notifier: ";
     static const size_t preflen = sizeof(prefix) - 1;
@@ -582,13 +582,16 @@ static void notify_error_handler(void* ehdata, const char* msg, size_t msglen)
 
 static int pushNotifyErrorMessage(lua_State* L)
 {
-    notify_error_handler_data* ehdata = lua_touserdata(L, 1);
-    lua_pushlstring(L, ehdata->buffer, ehdata->len);
+    notify_error_handler_data* notify_ehdata = lua_touserdata(L, 1);
+    lua_pushlstring(L, notify_ehdata->buffer, notify_ehdata->len);
     return 1;
 }
 
 
-int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, bool nonblock, bool clear, int arg, const char* args, size_t args_size)
+int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, 
+                                              bool nonblock, bool clear, int arg, 
+                                              const char* args, size_t args_size, 
+                                              receiver_error_handler receiver_eh, void* receiver_ehdata)
 {
     if (arg) {
         int errorArg = 0;
@@ -682,11 +685,11 @@ int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, bool nonblock, bool 
         if (L) {
             luaL_checkstack(L, 10, NULL);
         }
-        notify_error_handler_data ehdata = { NULL, 0 };
+        notify_error_handler_data notify_ehdata = { NULL, 0 };
         int rc = notifierHolder->notifyapi->notify(notifierHolder->notifier, 
-                                                   notify_error_handler, &ehdata);
+                                                   notify_error_handler, &notify_ehdata);
         if (rc == 1) {
-            // notifier should not be called again
+            /* notifier should not be called again */
             async_mutex_lock(b->sharedMutex);
             if (b->notifierHolder == notifierHolder) {
                 atomic_dec(&notifierHolder->used);
@@ -699,15 +702,18 @@ int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, bool nonblock, bool 
             free(notifierHolder);
         }
         bool isError = (rc != 0 && rc != 1);
-        if (ehdata.buffer) {
+        if (notify_ehdata.buffer) {
             if (L && isError) {
                 lua_pushcfunction(L, pushNotifyErrorMessage);
-                lua_pushlightuserdata(L, &ehdata);
+                lua_pushlightuserdata(L, &notify_ehdata);
                 lua_pcall(L, 1, 1, 0);
-                free(ehdata.buffer);
+                free(notify_ehdata.buffer);
                 return lua_error(L);
             } else {
-                free(ehdata.buffer);
+                if (receiver_eh) {
+                    receiver_eh(receiver_ehdata, notify_ehdata.buffer, notify_ehdata.len);
+                }
+                free(notify_ehdata.buffer);
                 if (isError) {
                     return 999;
                 }
@@ -717,6 +723,18 @@ int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, bool nonblock, bool 
                 return luaL_error(L, "Unknown error while calling notifier. (rc=%d)", rc);
             }
             else {
+                if (receiver_eh) {
+                    char errmsg[80];
+                    int len = 
+                #if _XOPEN_SOURCE >= 500 || _ISOC99_SOURCE || __STDC_VERSION__ >= 199901L
+                        snprintf(errmsg, sizeof(errmsg),
+                #else
+                        sprintf(errmsg,
+                #endif
+                            "Unknown error while calling notifier. (rc=%d)", rc);
+                            
+                    receiver_eh(receiver_ehdata, errmsg, len);
+                }
                 return 999;
             }
         }
@@ -730,7 +748,7 @@ static int MsgBuffer_setMsg(lua_State* L)
     int arg = 1;
     BufferUserData* udata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
     bool clear = true;
-    int rc = mtmsg_buffer_set_or_add_msg(L, udata->buffer, udata->nonblock, clear, arg, NULL, 0);
+    int rc = mtmsg_buffer_set_or_add_msg(L, udata->buffer, udata->nonblock, clear, arg, NULL, 0, NULL, NULL);
     lua_pushboolean(L, rc == 0);
     return 1;
 }
@@ -739,7 +757,7 @@ static int MsgBuffer_addMsg(lua_State* L)
     int arg = 1;
     BufferUserData* udata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
     bool clear = false;
-    int rc = mtmsg_buffer_set_or_add_msg(L, udata->buffer, udata->nonblock, clear, arg, NULL, 0);
+    int rc = mtmsg_buffer_set_or_add_msg(L, udata->buffer, udata->nonblock, clear, arg, NULL, 0, NULL, NULL);
     lua_pushboolean(L, rc == 0);
     return 1;
 }
@@ -860,7 +878,7 @@ static int MsgBuffer_nextMsg(lua_State* L)
     BufferUserData* udata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
     
     int parsedArgCount = mtmsg_buffer_next_msg(L, udata, arg, NULL, NULL);
-    return parsedArgCount; // parsedArgCount because resultBuffer is NULL
+    return parsedArgCount; /* parsedArgCount because resultBuffer is NULL */
 }
 
 static int MsgBuffer_toString(lua_State* L)
@@ -1076,8 +1094,9 @@ static void setupBufferMeta(lua_State* L)
     luaL_setfuncs(L, MsgBufferMethods, 0);             /* -> meta, BufferClass */
     lua_setfield (L, -2, "__index");                   /* -> meta */
     
-    lua_pushlightuserdata(L, (void*)&mtmsg_capi_impl); /* -> meta, capi */
-    lua_setfield(L, -2, "_capi_mtmsg");                /* -> meta */
+    lua_pushlightuserdata(L, 
+                    (void*)&mtmsg_receiver_capi_impl); /* -> meta, capi */
+    lua_setfield(L, -2, "_capi_receiver");             /* -> meta */
 }
 
 

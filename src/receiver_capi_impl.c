@@ -1,4 +1,4 @@
-#include "capi_impl.h"
+#include "receiver_capi_impl.h"
 #include "buffer.h"
 #include "main.h"
 #include "serialize.h"
@@ -116,26 +116,14 @@ static int addStringToWriter(receiver_writer* writer, const char* value, size_t 
     return rc;
 }
 
-static int addMsgToReceiver(receiver_object* buffer, receiver_writer* writer, receiver_error_handler eh, void* ehdata)
+static int msgToReceiver(receiver_object* buffer, receiver_writer* writer, 
+                         int clear, int nonblock,
+                         receiver_error_handler eh, void* ehdata)
 {
     MsgBuffer* b  = (MsgBuffer*)buffer;
-    bool nonblock = false;
-    bool clear    = false;
     int rc = mtmsg_buffer_set_or_add_msg(NULL, b, nonblock, clear, 0, writer->mem.bufferStart, writer->mem.bufferLength, eh, ehdata);
     if (rc == 0) {
-        writer->mem.bufferLength = 0;
-    }
-    return rc;
-}
-
-static int setMsgToReceiver(receiver_object* buffer, receiver_writer* writer, receiver_error_handler eh, void* ehdata)
-{
-    MsgBuffer* b  = (MsgBuffer*)buffer;
-    bool nonblock = false;
-    bool clear    = true;
-    int rc = mtmsg_buffer_set_or_add_msg(NULL, b, nonblock, clear, 0, writer->mem.bufferStart, writer->mem.bufferLength, eh, ehdata);
-    if (rc == 0) {
-        writer->mem.bufferLength = 0;
+        clearWriter(writer);
     }
     return rc;
 }
@@ -161,6 +149,5 @@ const receiver_capi mtmsg_receiver_capi_impl =
     addIntegerToWriter,
     addStringToWriter,
 
-    addMsgToReceiver,
-    setMsgToReceiver
+    msgToReceiver,
 };

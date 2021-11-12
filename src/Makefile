@@ -3,7 +3,7 @@ default: mtmsg
 
 BUILD_DATE  := $(shell date "+%Y-%m-%dT%H:%M:%S")
 
-LNX_GCC_RUN := gcc -shared -fPIC -O2
+LNX_GCC_RUN := gcc -shared -fPIC -O2 -g
 WIN_GCC_RUN := gcc -shared -fPIC -O2
 MAC_GCC_RUN := MACOSX_DEPLOYMENT_TARGET=10.8 gcc -O2 -bundle -undefined dynamic_lookup -all_load
 
@@ -43,7 +43,7 @@ mtmsg:
 	    -D MTMSG_VERSION=Makefile"-$(BUILD_DATE)" \
 	    main.c         buffer.c       listener.c   writer.c \
 	    reader.c       serialize.c    error.c      util.c   \
-	    async_util.c   mtmsg_compat.c capi_impl.c \
+	    async_util.c   mtmsg_compat.c receiver_capi_impl.c \
 	    $(LOPTS) \
 	    -o build/lua$(LUA_VERSION)/mtmsg.$(SO_EXT)
 	    

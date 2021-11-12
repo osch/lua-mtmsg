@@ -1,11 +1,12 @@
-#define NOTIFY_CAPI_IMPLEMENT_GET_CAPI 1
+#define NOTIFY_CAPI_IMPLEMENT_GET_CAPI   1
+#define RECEIVER_CAPI_IMPLEMENT_SET_CAPI 1
 
 #include "buffer.h"
 #include "listener.h"
 #include "serialize.h"
 #include "main.h"
 #include "error.h"
-#include "capi_impl.h"
+#include "receiver_capi_impl.h"
 
 const char* const MTMSG_BUFFER_CLASS_NAME = "mtmsg.buffer";
 
@@ -605,7 +606,7 @@ int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b,
     
     if (nonblock) {
         if (!async_mutex_trylock(b->sharedMutex)) {
-            return 1;
+            return 3; /* buffer not ready */
         }
     } else {
         async_mutex_lock(b->sharedMutex);
@@ -616,7 +617,7 @@ int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b,
             const char* bstring = mtmsg_buffer_tostring(L, b);
             return mtmsg_ERROR_OBJECT_CLOSED(L, bstring);
         } else {
-            return 100;
+            return 1; /* buffer closed */
         }
     }
     if (b->aborted) {
@@ -624,7 +625,7 @@ int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b,
         if (L) {
             return mtmsg_ERROR_OPERATION_ABORTED(L);
         } else {
-            return 102;
+            return 2; /* buffer aborted */
         }
     }
     if (clear) {
@@ -638,21 +639,21 @@ int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b,
                 /* buffer should not grow */
                 if (msg_size <= b->mem.bufferCapacity) {
                     /* queue is full */
-                    return 2;
+                    return 4;
                 } else {
                     /* message is too large */
                     if (L) {
                         const char* bstring = mtmsg_buffer_tostring(L, b);
                         return mtmsg_ERROR_MESSAGE_SIZE_bytes(L, msg_size, b->mem.bufferCapacity, bstring);
                     } else {
-                        return 103;
+                        return 5;
                     }
                 }
             } else {
                 if (L) {
                     return mtmsg_ERROR_OUT_OF_MEMORY_bytes(L, b->mem.bufferLength + msg_size);
                 } else {
-                    return 104;
+                    return 6;
                 }
             }
         }
@@ -1084,19 +1085,17 @@ static const luaL_Reg ModuleFunctions[] =
 };
 
 static void setupBufferMeta(lua_State* L)
-{                                                      /* -> meta */
-    lua_pushstring(L, MTMSG_BUFFER_CLASS_NAME);        /* -> meta, className */
-    lua_setfield(L, -2, "__metatable");                /* -> meta */
+{                                                        /* -> meta */
+    lua_pushstring(L, MTMSG_BUFFER_CLASS_NAME);          /* -> meta, className */
+    lua_setfield(L, -2, "__metatable");                  /* -> meta */
 
-    luaL_setfuncs(L, MsgBufferMetaMethods, 0);         /* -> meta */
+    luaL_setfuncs(L, MsgBufferMetaMethods, 0);           /* -> meta */
     
-    lua_newtable(L);                                   /* -> meta, BufferClass */
-    luaL_setfuncs(L, MsgBufferMethods, 0);             /* -> meta, BufferClass */
-    lua_setfield (L, -2, "__index");                   /* -> meta */
+    lua_newtable(L);                                     /* -> meta, BufferClass */
+    luaL_setfuncs(L, MsgBufferMethods, 0);               /* -> meta, BufferClass */
+    lua_setfield (L, -2, "__index");                     /* -> meta */
     
-    lua_pushlightuserdata(L, 
-                    (void*)&mtmsg_receiver_capi_impl); /* -> meta, capi */
-    lua_setfield(L, -2, "_capi_receiver");             /* -> meta */
+    receiver_set_capi(L, -1, &mtmsg_receiver_capi_impl); /* -> meta */
 }
 
 

@@ -41,7 +41,7 @@ build = {
           "src/util.c",
           "src/async_util.c",
           "src/mtmsg_compat.c",
-          "src/capi_impl.c",
+          "src/receiver_capi_impl.c",
       },
       defines = { "MTMSG_VERSION="..version:gsub("^(.*)-.-$", "%1") },
     },

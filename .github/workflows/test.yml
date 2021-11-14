@@ -49,4 +49,5 @@ jobs:
         lua example03.lua
         lua example04.lua
         lua example05.lua
+        lua example06.lua
      

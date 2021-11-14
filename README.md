@@ -384,9 +384,12 @@ assert(lst:nextmsg(0) == nil)
   C API function *toNotifier()* must return a valid pointer for the given 
   notifier object *ntf*.
   
-  Examples:
-  * [lua-lpugl/example/example10.lua](https://github.com/osch/lua-lpugl/blob/master/example/example10.lua)
-  * [lua-mtstates/examples/example06.lua](https://github.com/osch/lua-mtstates/blob/master/examples/example06.lua)
+  A buffer itself does also implement the Notify C API, i.e. a buffer can be
+  also set as notifier for another buffer, see [lua-mtmsg/example06.lua](./examples/example06.lua).
+  
+  More Examples:
+  * [lua-mtstates/example06.lua](https://github.com/osch/lua-mtstates/blob/master/examples/example06.lua)
+  * [lua-lpugl/example10.lua](https://github.com/osch/lua-lpugl/blob/master/example/example10.lua)
 
   Possible errors: *mtmsg.error.object_closed*,
                    *mtmsg.error.has_notifier*

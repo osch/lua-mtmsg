@@ -43,7 +43,8 @@ mtmsg:
 	    -D MTMSG_VERSION=Makefile"-$(BUILD_DATE)" \
 	    main.c         buffer.c       listener.c   writer.c \
 	    reader.c       serialize.c    error.c      util.c   \
-	    async_util.c   mtmsg_compat.c receiver_capi_impl.c \
+	    async_util.c   mtmsg_compat.c \
+	    receiver_capi_impl.c notify_capi_impl.c \
 	    $(LOPTS) \
 	    -o build/lua$(LUA_VERSION)/mtmsg.$(SO_EXT)
 	    

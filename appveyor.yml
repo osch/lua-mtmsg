@@ -59,6 +59,7 @@ test_script:
   - lua example03.lua
   - lua example04.lua
   - lua example05.lua
+  - lua example06.lua
   - cd %APPVEYOR_BUILD_FOLDER%\tests
   - lua test00.lua
   - lua test01.lua

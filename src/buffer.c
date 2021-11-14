@@ -1,4 +1,6 @@
+#define NOTIFY_CAPI_IMPLEMENT_SET_CAPI   1
 #define NOTIFY_CAPI_IMPLEMENT_GET_CAPI   1
+
 #define RECEIVER_CAPI_IMPLEMENT_SET_CAPI 1
 
 #include "buffer.h"
@@ -7,6 +9,7 @@
 #include "main.h"
 #include "error.h"
 #include "receiver_capi_impl.h"
+#include "notify_capi_impl.h"
 
 const char* const MTMSG_BUFFER_CLASS_NAME = "mtmsg.buffer";
 
@@ -665,7 +668,7 @@ int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b,
     if (arg) {
         mtmsg_serialize_args_to_buffer(L, arg, msgBufferStart + header_size);
     }
-    else {
+    else if (args_size > 0) {
         memcpy(msgBufferStart + header_size, args, args_size);
     }
     b->mem.bufferLength += msg_size;
@@ -1096,6 +1099,7 @@ static void setupBufferMeta(lua_State* L)
     lua_setfield (L, -2, "__index");                     /* -> meta */
     
     receiver_set_capi(L, -1, &mtmsg_receiver_capi_impl); /* -> meta */
+    notify_set_capi  (L, -1, &mtmsg_notify_capi_impl);   /* -> meta */
 }
 
 

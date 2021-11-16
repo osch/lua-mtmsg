@@ -390,6 +390,7 @@ assert(lst:nextmsg(0) == nil)
   More Examples:
   * [lua-mtstates/example06.lua](https://github.com/osch/lua-mtstates/blob/master/examples/example06.lua)
   * [lua-lpugl/example10.lua](https://github.com/osch/lua-lpugl/blob/master/example/example10.lua)
+  * [lua-nocurses/example03.lua](https://github.com/osch/lua-nocurses/blob/master/examples/example03.lua)
 
   Possible errors: *mtmsg.error.object_closed*,
                    *mtmsg.error.has_notifier*

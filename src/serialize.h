@@ -139,7 +139,7 @@ static inline void mtmsg_serialize_header_to_buffer(size_t args_size, char* buff
         *buffer     = (char)args_size;
     }
     else {
-        *(buffer++) = BUFFER_MSGSIZE;
+        *(buffer++) = (char)BUFFER_MSGSIZE;
         memcpy(buffer, &args_size, sizeof(size_t)); 
     }
 }

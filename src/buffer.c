@@ -926,8 +926,8 @@ static int Mtmsg_notifier(lua_State* L)
     notify_notifier*   notifier  = NULL;
 
     if (lua_gettop(L) >= arg) {
-        int versErr = 0;
-        notifyapi = notify_get_capi(L, arg, &versErr);
+        int errReason = 0;
+        notifyapi = notify_get_capi(L, arg, &errReason);
         if (notifyapi) {
             notifier = notifyapi->toNotifier(L, arg);
             if (!notifier) {
@@ -935,7 +935,7 @@ static int Mtmsg_notifier(lua_State* L)
             }
             arg += 1;
         }
-        else if (versErr) {
+        else if (errReason == 1) {
             return luaL_argerror(L, arg, "notifier api version mismatch");
         }
         else if (lua_type(L, arg) != LUA_TNIL) {

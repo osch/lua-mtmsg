@@ -111,8 +111,12 @@ static int notify_set_capi(lua_State* L, int index, const notify_capi* capi)
 #if NOTIFY_CAPI_IMPLEMENT_GET_CAPI
 /**
  * Gives the associated Notify C API for the object at the given stack index.
+ * Returns NULL, if the object at the given stack index does not have an 
+ * associated Notify C API or only has a Notify C API with incompatible version
+ * number. If errorReason is not NULL it receives the error reason in this case:
+ * 1 for incompatible version nummber and 2 for no associated C API at all.
  */
-static const notify_capi* notify_get_capi(lua_State* L, int index, int* versionError)
+static const notify_capi* notify_get_capi(lua_State* L, int index, int* errorReason)
 {
     if (luaL_getmetafield(L, index, NOTIFY_CAPI_ID_STRING) == LUA_TUSERDATA) /* -> _capi */
     {
@@ -132,12 +136,20 @@ static const notify_capi* notify_get_capi(lua_State* L, int index, int* versionE
                 }
                 capi = capi->next_capi;
             }
-            if (versionError) {
-                *versionError = 1;
+            if (errorReason) {
+                *errorReason = 1;
             }
-        }                                                                    /* -> _capi */
+        } else {                                                             /* -> _capi */
+            if (errorReason) {
+                *errorReason = 2;
+            }
+        }
         lua_pop(L, 1);                                                       /* -> */
-    }                                                                        /* -> */
+    } else {                                                                 /* -> */
+        if (errorReason) {
+            *errorReason = 2;
+        }
+    }
     return NULL;
 }
 #endif /* NOTIFY_CAPI_IMPLEMENT_GET_CAPI */

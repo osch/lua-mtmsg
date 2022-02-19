@@ -377,12 +377,14 @@ assert(lst:nextmsg(0) == nil)
   A buffer can only have one connected notifier object. It is an error to call 
   this method in case the buffer already has a connected notifier object.
   
-  The given notifier object must implement the *Notify C API*, 
+  The given notifier object must implement the [Notify C API], 
   see [src/notify_capi.h](./src/notify_capi.h), i.e. the given object must
   have an an associated meta table entry *_capi_notify* delivered by
   the C API function *notify_get_capi()* and the associated 
   C API function *toNotifier()* must return a valid pointer for the given 
   notifier object *ntf*.
+  
+  [Notify C API]: https://github.com/lua-capis/lua-notify-capi
   
   A buffer itself does also implement the Notify C API, i.e. a buffer can be
   also set as notifier for another buffer, see [lua-mtmsg/example06.lua](./examples/example06.lua).

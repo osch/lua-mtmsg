@@ -118,11 +118,12 @@ static int notify_set_capi(lua_State* L, int index, const notify_capi* capi)
  */
 static const notify_capi* notify_get_capi(lua_State* L, int index, int* errorReason)
 {
-    if (luaL_getmetafield(L, index, NOTIFY_CAPI_ID_STRING) == LUA_TUSERDATA) /* -> _capi */
+    if (luaL_getmetafield(L, index, NOTIFY_CAPI_ID_STRING) != LUA_TNIL)      /* -> _capi */
     {
         void** udata = lua_touserdata(L, -1);                                /* -> _capi */
 
-        if (   (lua_rawlen(L, -1) >= sizeof(void*) + strlen(NOTIFY_CAPI_ID_STRING) + 1)
+        if (   udata
+            && (lua_rawlen(L, -1) >= sizeof(void*) + strlen(NOTIFY_CAPI_ID_STRING) + 1)
             && (memcmp((char*)(udata + 1), NOTIFY_CAPI_ID_STRING, 
                        strlen(NOTIFY_CAPI_ID_STRING) + 1) == 0))
         {

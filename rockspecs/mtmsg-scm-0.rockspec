@@ -43,6 +43,7 @@ build = {
           "src/mtmsg_compat.c",
           "src/receiver_capi_impl.c",
           "src/notify_capi_impl.c",
+          "src/sender_capi_impl.c",
       },
       defines = { "MTMSG_VERSION="..version:gsub("^(.*)-.-$", "%1") },
     },

@@ -2,6 +2,7 @@
 #define NOTIFY_CAPI_IMPLEMENT_GET_CAPI   1
 
 #define RECEIVER_CAPI_IMPLEMENT_SET_CAPI 1
+#define SENDER_CAPI_IMPLEMENT_SET_CAPI   1
 
 #include "buffer.h"
 #include "listener.h"
@@ -9,6 +10,7 @@
 #include "main.h"
 #include "error.h"
 #include "receiver_capi_impl.h"
+#include "sender_capi_impl.h"
 #include "notify_capi_impl.h"
 
 const char* const MTMSG_BUFFER_CLASS_NAME = "mtmsg.buffer";
@@ -767,18 +769,22 @@ static int MsgBuffer_addMsg(lua_State* L)
 }
 
     
-int mtmsg_buffer_next_msg(lua_State* L, BufferUserData* udata, int arg, MemBuffer* resultBuffer, size_t* argsSize)
+int mtmsg_buffer_next_msg(lua_State* L, MsgBuffer* b, bool nonblock, int arg, double timeoutSeconds , MemBuffer* resultBuffer, size_t* argsSize)
 {
-    MsgBuffer*  b = udata->buffer;
-
     lua_Number endTime   = 0; /* 0 = no timeout */
 
-    if (!lua_isnoneornil(L, arg)) {
-        lua_Number waitSeconds = luaL_checknumber(L, arg);
-        endTime = mtmsg_current_time_seconds() + waitSeconds;
+    if (L) {
+        if (arg && !lua_isnoneornil(L, arg)) {
+            lua_Number waitSeconds = luaL_checknumber(L, arg);
+            endTime = mtmsg_current_time_seconds() + waitSeconds;
+        }
+    } else {
+        if (timeoutSeconds >= 0) {
+            endTime = mtmsg_current_time_seconds() + timeoutSeconds;
+        }
     }
 
-    if (udata->nonblock) {
+    if (nonblock) {
         if (!async_mutex_trylock(b->sharedMutex)) {
             return 0;
         }
@@ -790,14 +796,22 @@ again:
     if (b->closed) {
         async_mutex_notify(b->sharedMutex);
         async_mutex_unlock(b->sharedMutex);
-        const char* qstring = mtmsg_buffer_tostring(L, b);
-        return mtmsg_ERROR_OBJECT_CLOSED(L, qstring);
+        if (L) {
+            const char* qstring = mtmsg_buffer_tostring(L, b);
+            return mtmsg_ERROR_OBJECT_CLOSED(L, qstring);
+        } else {
+            return -1; /* 1 - if sender is closed. */
+        }
     }
     
     if (b->aborted) {
         async_mutex_notify(b->sharedMutex);
         async_mutex_unlock(b->sharedMutex);
-        return mtmsg_ERROR_OPERATION_ABORTED(L);
+        if (L) {
+            return mtmsg_ERROR_OPERATION_ABORTED(L);
+        } else {
+            return -2; /* 2 - if sender was aborted. */
+        }
     }
     if (b->mem.bufferLength > 0) {
         SerializedMsgSizes sizes;
@@ -805,7 +819,7 @@ again:
         if (argsSize) *argsSize = sizes.args_size;
         
         size_t msg_size;
-        int    parsedArgCount = 0;
+        int    rslt = 0; /* is parsedArgCount for resultBuffer == NULL */
         if (resultBuffer == NULL) {
             GetMsgArgsPar par; par.inBuffer       = b->mem.bufferStart + sizes.header_size;
                                par.inBufferSize   = sizes.args_size;
@@ -819,13 +833,15 @@ again:
                 async_mutex_unlock(b->sharedMutex);
                 return lua_error(L);
             }
-            parsedArgCount = par.parsedArgCount;
+            rslt = par.parsedArgCount;
             msg_size = sizes.header_size + par.parsedLength;
         } else {
             int rc = mtmsg_membuf_reserve(resultBuffer, sizes.args_size);
             if (rc != 0) {
                 async_mutex_unlock(b->sharedMutex);
-                return rc;
+                /* rc = -1 : buffer should not grow */
+                /* rc = -2 : buffer can    not grow */
+                return (rc == -1) ? -4 : -5;
             }
             memcpy(resultBuffer->bufferStart + resultBuffer->bufferLength, 
                    b->mem.bufferStart + sizes.header_size, 
@@ -833,7 +849,7 @@ again:
             resultBuffer->bufferLength += sizes.args_size;
             
             msg_size = sizes.header_size + sizes.args_size;
-            parsedArgCount = 1;
+            rslt = 1;
         }
 
         b->mem.bufferLength -= msg_size;
@@ -853,7 +869,7 @@ again:
         }
         async_mutex_unlock(b->sharedMutex);
     
-        return parsedArgCount;
+        return rslt;
     } else {
         if (endTime > 0) {
             lua_Number now = mtmsg_current_time_seconds();
@@ -865,7 +881,7 @@ again:
                 return 0;
             }
         } else {
-            if (udata->nonblock) {
+            if (nonblock) {
                 async_mutex_unlock(b->sharedMutex);
                 return 0;
             } else {
@@ -881,7 +897,7 @@ static int MsgBuffer_nextMsg(lua_State* L)
     int arg = 1;
     BufferUserData* udata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
     
-    int parsedArgCount = mtmsg_buffer_next_msg(L, udata, arg, NULL, NULL);
+    int parsedArgCount = mtmsg_buffer_next_msg(L, udata->buffer, udata->nonblock, arg, 0 /* timeout from arg */, NULL, NULL);
     return parsedArgCount; /* parsedArgCount because resultBuffer is NULL */
 }
 
@@ -1099,6 +1115,7 @@ static void setupBufferMeta(lua_State* L)
     lua_setfield (L, -2, "__index");                     /* -> meta */
     
     receiver_set_capi(L, -1, &mtmsg_receiver_capi_impl); /* -> meta */
+    sender_set_capi  (L, -1, &mtmsg_sender_capi_impl); /* -> meta */
     notify_set_capi  (L, -1, &mtmsg_notify_capi_impl);   /* -> meta */
 }
 

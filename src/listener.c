@@ -403,11 +403,9 @@ static int MsgListener_newBuffer(lua_State* L)
 }
 
 
-int mtmsg_listener_next_msg(lua_State* L, ListenerUserData* listenerUdata, int arg, 
+int mtmsg_listener_next_msg(lua_State* L, MsgListener* listener, bool nonblock, int arg, 
                             MemBuffer* resultBuffer, size_t* argsSize)
 {
-    MsgListener* listener = listenerUdata->listener;
-
     lua_Number endTime   = 0; /* 0 = no timeout */
 
     if (!lua_isnoneornil(L, arg)) {
@@ -415,7 +413,7 @@ int mtmsg_listener_next_msg(lua_State* L, ListenerUserData* listenerUdata, int a
         endTime = mtmsg_current_time_seconds() + waitSeconds;
     }
 
-    if (listenerUdata->nonblock) {
+    if (nonblock) {
         if (!async_mutex_trylock(&listener->listenerMutex)) {
             return 0;
         }
@@ -450,7 +448,7 @@ again:
                 if (argsSize) *argsSize = sizes.args_size;
                 
                 size_t msg_size;
-                int    parsedArgCount = 0;
+                int    rslt = 0; /* is parsedArgCount for resultBuffer == NULL */
                 if (resultBuffer == NULL) {
                     GetMsgArgsPar par; par.inBuffer       = b->mem.bufferStart + sizes.header_size;
                                        par.inBufferSize   = sizes.args_size;
@@ -464,13 +462,15 @@ again:
                         async_mutex_unlock(&listener->listenerMutex);
                         return lua_error(L);
                     }
-                    parsedArgCount = par.parsedArgCount;
+                    rslt = par.parsedArgCount;
                     msg_size = sizes.header_size + par.parsedLength;
                 } else {
                     int rc = mtmsg_membuf_reserve(resultBuffer, sizes.args_size);
                     if (rc != 0) {
                         async_mutex_unlock(&listener->listenerMutex);
-                        return rc;
+                        /* rc = -1 : buffer should not grow */
+                        /* rc = -2 : buffer can    not grow */
+                        return (rc == -1) ? -4 : -5;
                     }
                     memcpy(resultBuffer->bufferStart + resultBuffer->bufferLength, 
                            b->mem.bufferStart + sizes.header_size, 
@@ -478,7 +478,7 @@ again:
                     resultBuffer->bufferLength += sizes.args_size;
                     
                     msg_size = sizes.header_size + sizes.args_size;
-                    parsedArgCount = 1;
+                    rslt = 1;
                 }
                 
                 b->mem.bufferLength -= msg_size;
@@ -498,7 +498,7 @@ again:
                     async_mutex_notify(&listener->listenerMutex);
                 }
                 async_mutex_unlock(&listener->listenerMutex);
-                return parsedArgCount;
+                return rslt;
             }
             else
             {
@@ -514,7 +514,7 @@ again:
             async_mutex_wait_millis(&listener->listenerMutex, (int)((endTime - now) * 1000 + 0.5));
             goto again;
         }
-    } else if (!listenerUdata->nonblock) {
+    } else if (!nonblock) {
         async_mutex_wait(&listener->listenerMutex);
         goto again;
     }
@@ -528,7 +528,7 @@ static int MsgListener_nextMsg(lua_State* L)
     int arg = 1;
     ListenerUserData* udata = luaL_checkudata(L, arg++, MTMSG_LISTENER_CLASS_NAME);
     
-    int parsedArgCount = mtmsg_listener_next_msg(L, udata, arg, NULL, NULL);
+    int parsedArgCount = mtmsg_listener_next_msg(L, udata->listener, udata->nonblock, arg, NULL, NULL);
     return parsedArgCount; /* parsedArgCount because resultBuffer is NULL */
 }
 

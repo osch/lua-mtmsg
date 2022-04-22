@@ -59,7 +59,7 @@ void mtmsg_buffer_free_unreachable(MsgListener* listener, MsgBuffer* b);
 
 int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, bool nonblock, bool clear, int arg, const char* args, size_t args_size, receiver_error_handler eh, void* ehdata);
 
-int mtmsg_buffer_next_msg(lua_State* L, BufferUserData* udata, int arg, MemBuffer* resultBuffer, size_t* argsSize);
+int mtmsg_buffer_next_msg(lua_State* L, MsgBuffer* b, bool nonblock, int arg, double timeoutSeconds, MemBuffer* resultBuffer, size_t* argsSize);
 
 static inline void mtmsg_buffer_remove_from_ready_list(MsgListener* listener, MsgBuffer* b, bool freeIfUnreachable)
 {

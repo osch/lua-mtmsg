@@ -122,12 +122,12 @@ static int Reader_nextMsg(lua_State* L)
     size_t args_size = 0;
     int rc = 0;
     if (budata) {    
-        rc = mtmsg_buffer_next_msg  (L, budata, arg, &rudata->mem, &args_size);
+        rc = mtmsg_buffer_next_msg  (L, budata->buffer, budata->nonblock, arg, 0 /* timeout from arg */, &rudata->mem, &args_size);
     } else {
-        rc = mtmsg_listener_next_msg(L, ludata, arg, &rudata->mem, &args_size);
+        rc = mtmsg_listener_next_msg(L, ludata->listener, ludata->nonblock, arg, &rudata->mem, &args_size);
     }
     if (rc < 0) {
-        if (rc == -1) {
+        if (rc == -4) {
             /* buffer should not grow and message is too large */
             const char* wstring = luaL_tolstring(L, 1, NULL);
             return mtmsg_ERROR_MESSAGE_SIZE_bytes(L, rudata->mem.bufferLength + args_size, rudata->mem.bufferCapacity, wstring);

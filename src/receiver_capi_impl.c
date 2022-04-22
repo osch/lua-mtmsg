@@ -116,6 +116,21 @@ static int addStringToWriter(receiver_writer* writer, const char* value, size_t 
     return rc;
 }
 
+static int addBytesToWriter(receiver_writer* writer, const unsigned char* value, size_t len)
+{
+    size_t args_size = 2 * len;
+    int rc = mtmsg_membuf_reserve(&writer->mem, args_size);
+    if (rc == 0) {
+        char* buffer = writer->mem.bufferStart + writer->mem.bufferLength;
+        for (int i = 0; i < len; ++i) {
+            *(buffer++) = BUFFER_BYTE;
+            *(buffer++) = (char) value[i];
+        }
+        writer->mem.bufferLength += args_size;
+    }
+    return rc;
+}
+
 static int msgToReceiver(receiver_object* buffer, receiver_writer* writer, 
                          int clear, int nonblock,
                          receiver_error_handler eh, void* ehdata)
@@ -144,10 +159,11 @@ const receiver_capi mtmsg_receiver_capi_impl =
     newWriter,
     freeWriter,
 
+    msgToReceiver,
+
     clearWriter,
     addBooleanToWriter,
     addIntegerToWriter,
     addStringToWriter,
-
-    msgToReceiver,
+    addBytesToWriter,
 };

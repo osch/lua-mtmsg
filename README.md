@@ -151,11 +151,13 @@ assert(lst:nextmsg(0) == nil)
   The created buffer is garbage collected if the last object referencing this
   buffer vanishes.
   
-  The created buffer objects implement the [Notify C API] and the [Receiver C API],
-  i.e. native code can send notifications or messages from any thread.
+  The created buffer objects implement the [Notify C API], the [Receiver C API] 
+  and the [Sender C API], i.e. native code can send notifications or send or 
+  receive messages from any thread.
   
   [Notify C API]:   https://github.com/lua-capis/lua-notify-capi
   [Receiver C API]: https://github.com/lua-capis/lua-receiver-capi
+  [Sender C API]:   https://github.com/lua-capis/lua-sender-capi
   
   Possible errors: *mtmsg.error.operation_aborted*
                    

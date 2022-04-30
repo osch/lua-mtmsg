@@ -2,9 +2,9 @@
 #define SENDER_CAPI_H
 
 #define SENDER_CAPI_ID_STRING     "_capi_sender"
-#define SENDER_CAPI_VERSION_MAJOR -1
-#define SENDER_CAPI_VERSION_MINOR  1
-#define SENDER_CAPI_VERSION_PATCH  0
+#define SENDER_CAPI_VERSION_MAJOR  0
+#define SENDER_CAPI_VERSION_MINOR  0
+#define SENDER_CAPI_VERSION_PATCH  1
 
 typedef struct sender_object          sender_object;
 typedef struct sender_reader          sender_reader;

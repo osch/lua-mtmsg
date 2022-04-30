@@ -1,5 +1,5 @@
 package = "mtmsg"
-version = "0.4.1-1"
+version = "0.4.2-1"
 local versionNumber = version:gsub("^(.*)-.-$", "%1")
 source = {
   url = "https://github.com/osch/lua-mtmsg/archive/v"..versionNumber..".zip",
@@ -42,6 +42,9 @@ build = {
           "src/util.c",
           "src/async_util.c",
           "src/mtmsg_compat.c",
+          "src/receiver_capi_impl.c",
+          "src/notify_capi_impl.c",
+          "src/sender_capi_impl.c",
       },
       defines = { "MTMSG_VERSION="..versionNumber },
     },

@@ -1,5 +1,8 @@
 #include "util.h"
 
+#define CARRAY_CAPI_IMPLEMENT_GET_CAPI 1
+#include "carray_capi.h"
+
 lua_Number mtmsg_current_time_seconds()
 {
     lua_Number rslt;
@@ -114,4 +117,3 @@ void mtmsg_util_quote_string(lua_State* L, const char* s)
 {
     mtmsg_util_quote_lstring(L, s, (s != NULL) ? strlen(s) : 0);
 }
-

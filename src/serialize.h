@@ -2,6 +2,9 @@
 #define MTMSG_SERIALIZE_H
 
 #include "util.h"
+#include "carray_capi.h"
+
+typedef struct carray_capi carray_capi;
 
 typedef enum {
     BUFFER_NIL,
@@ -12,7 +15,8 @@ typedef enum {
     BUFFER_STRING,
     BUFFER_SMALLSTRING,
     BUFFER_LIGHTUSERDATA,
-    BUFFER_CFUNCTION
+    BUFFER_CFUNCTION,
+    BUFFER_CARRAY
 } SerializeDataType;
 
 #define MTMSG_ARG_SIZE_INITIAL       0
@@ -23,11 +27,12 @@ typedef enum {
 #define MTMSG_ARG_SIZE_CFUNCTION     (1 + sizeof(lua_CFunction))
                                     
 typedef struct GetMsgArgsPar {
-    const char* inBuffer;
-    size_t      inBufferSize;
-    int         inMaxArgCount;
-    size_t      parsedLength;
-    int         parsedArgCount;
+    const char*        inBuffer;
+    size_t             inBufferSize;
+    int                inMaxArgCount;
+    size_t             parsedLength;
+    int                parsedArgCount;
+    const carray_capi* carrayCapi;
 } GetMsgArgsPar;
 
 typedef struct SerializedMsgSizes {
@@ -54,6 +59,12 @@ static inline size_t mtmsg_serialize_calc_string_size(size_t len)
         return 1 + sizeof(size_t) + len;
     }
 }
+
+static inline size_t mtmsg_serialize_calc_carray_size(carray_info* info) 
+{
+    return 1 + 1 + 1 + sizeof(size_t) + info->elementSize * info->elementCount;
+}
+
 
 static inline char* mtmsg_serialize_boolean_to_buffer(int value, char* buffer)
 {
@@ -113,6 +124,26 @@ static inline char* mtmsg_serialize_cfunction_to_buffer(lua_CFunction value, cha
     buffer += sizeof(lua_CFunction);
     return buffer;
 }
+
+static inline char* mtmsg_serialize_carray_header_to_buffer(carray_info* info, char* buffer)
+{
+    *buffer++ = BUFFER_CARRAY;
+    *buffer++ = info->type;
+    *buffer++ = (unsigned char)info->elementSize;
+    memcpy(buffer, &info->elementCount, sizeof(size_t));
+    buffer += sizeof(size_t);
+    return buffer;
+}
+
+static inline char* mtmsg_serialize_carray_to_buffer(carray_info* info, const void* content, char* buffer)
+{
+    buffer = mtmsg_serialize_carray_header_to_buffer(info, buffer);
+    size_t len = info->elementSize * info->elementCount;
+    memcpy(buffer, content, len);
+    buffer += len;
+    return buffer;
+}
+
 
 void mtmsg_serialize_args_to_buffer(lua_State* L, int firstArg, char* buffer);
 

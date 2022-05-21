@@ -17,6 +17,7 @@ This package is also available via LuaRocks, see https://luarocks.org/modules/os
 [Lua]:           https://www.lua.org
 [Lanes]:         https://luarocks.org/modules/benoitgermain/lanes
 [llthreads2]:    https://luarocks.org/modules/moteus/lua-llthreads2
+[carray]:        https://github.com/osch/lua-carray
 
 See below for full [reference documentation](#documentation) .
 
@@ -92,6 +93,7 @@ assert(lst:nextmsg(0) == nil)
        * buffer:name()
        * buffer:addmsg()
        * buffer:setmsg()
+       * buffer:msgcnt()
        * buffer:clear()
        * buffer:nextmsg()
        * buffer:notifier()
@@ -308,7 +310,8 @@ assert(lst:nextmsg(0) == nil)
 * **`buffer:addmsg(...)`**
 
   Adds the arguments together as one message to the buffer. Arguments can be
-  simple data types (string, number, boolean, nil, light user data, C function).
+  simple data types (string, number, boolean, nil, light user data, C function)
+  or [carray] objects.
   
   Returns *true* if the message could be added to the buffer. 
   
@@ -327,7 +330,7 @@ assert(lst:nextmsg(0) == nil)
 
   Sets the arguments together as one message into the buffer. All other messages
   in this buffer are discarded. Arguments can be simple data types 
-  (string, number, boolean, light user data, C function).
+  (string, number, boolean, light user data, C function) or [carray] objects.
   
   Returns *true* if the message could be set into the buffer.
   
@@ -338,6 +341,10 @@ assert(lst:nextmsg(0) == nil)
                    *mtmsg.error.object_closed*,
                    *mtmsg.error.operation_aborted*
 
+
+* **`buffer:msgcnt()`**
+
+  Returns the number of messages in the buffer.
 
 * **`buffer:clear()`**
 
@@ -372,18 +379,28 @@ assert(lst:nextmsg(0) == nil)
                    *mtmsg.error.operation_aborted*
 
 
-* **`buffer:notifier(ntf)`**
+* **`buffer:notifier(ntf[,type[,threshold]])`**
 
   Connects a notifier object to the underlying buffer.
   
-  * *ntf* notifier object or *nil*. If *nil* is given, an existing notifier 
-          object is disconnected from the underlying buffer.
+  * *ntf*       notifier object or *nil*. If *nil* is given, an existing notifier 
+                object of the specified type is disconnected from the underlying buffer.
+                
+  * *type*      optional string, value "<" for a notifier that is notified if a message 
+                is removed from the buffer and ">" for a notifier that is notified if
+                a message is added to the buffer. Default value is ">".
+                
+  * *threshold* optional integer. For notifier type "<" the notifier is notified
+                if the current number of messages is below the threshold after a
+                message is removed from the buffer. For notifier type ">" the notifier
+                is notifierd if the current number of message is above the threshold
+                after a message is added to the buffer. If nil or not given
+                the threshold is not considered. i.e. the corresponding notifier
+                is always called if a message is removed or added.
   
-  A connected notifier object is always called if a message is added to the 
-  underlying buffer.
-  
-  A buffer can only have one connected notifier object. It is an error to call 
-  this method in case the buffer already has a connected notifier object.
+  A buffer can only have one connected notifier object per notifier type "<" or ">".
+  It is an error to call this method in case the buffer already has a connected 
+  notifier object of the same type.
   
   The given notifier object must implement the [Notify C API], 
   see [src/notify_capi.h](./src/notify_capi.h), i.e. the given object must
@@ -573,7 +590,8 @@ is equivalent to
 * **`writer:add(...)`**
 
   Adds the arguments as message elements into the writer. Arguments can be
-  simple data types (string, number, boolean, nil, light user data, C function).
+  simple data types (string, number, boolean, nil, light user data, C function)
+  or [carray] objects.
   
   Possible errors: *mtmsg.error.message_size*
 

@@ -156,6 +156,38 @@ static void nextValueFromReader(sender_reader* reader, sender_capi_value* out)
                 out->funcVal = value;
                 break;
             }
+            case BUFFER_CARRAY: {
+                carray_type   carrayType   = (unsigned char)buffer[parsedLength++];
+                unsigned char elementSize  = (unsigned char)buffer[parsedLength++];;
+                size_t        elementCount;
+                memcpy(&elementCount, buffer + parsedLength, sizeof(size_t));
+                parsedLength += sizeof(size_t);
+
+                sender_array_type arrayType;
+                switch (carrayType) {
+                    case CARRAY_UCHAR:  arrayType = SENDER_UCHAR; break;
+                    case CARRAY_SCHAR:  arrayType = SENDER_SCHAR; break;
+                    case CARRAY_SHORT:  arrayType = SENDER_SHORT;  break;
+                    case CARRAY_USHORT: arrayType = SENDER_USHORT; break;
+                    case CARRAY_INT:    arrayType = SENDER_INT;  break;
+                    case CARRAY_UINT:   arrayType = SENDER_UINT; break;
+                    case CARRAY_LONG:   arrayType = SENDER_LONG;  break;
+                    case CARRAY_ULONG:  arrayType = SENDER_ULONG; break;
+                    case CARRAY_FLOAT:  arrayType = SENDER_FLOAT;  break;
+                    case CARRAY_DOUBLE: arrayType = SENDER_DOUBLE; break;
+                #if CARRAY_CAPI_HAVE_LONG_LONG
+                    case CARRAY_LLONG:  arrayType = SENDER_LLONG;  break;
+                    case CARRAY_ULLONG: arrayType = SENDER_ULLONG; break;
+                #endif
+                    default: arrayType = 0; break;
+                }
+                out->type = SENDER_CAPI_TYPE_ARRAY;
+                out->arrayVal.type         = arrayType;
+                out->arrayVal.elementSize  = elementSize;
+                out->arrayVal.elementCount = elementCount;
+                out->arrayVal.data         = buffer + parsedLength;
+                break;
+            }
         }
     }
     reader->mem.bufferLength -= parsedLength;
@@ -171,8 +203,10 @@ static int nextMessageFromSender(sender_object* sender, sender_reader* reader,
                                  sender_error_handler eh, void* ehdata)
 {
     MsgBuffer* buffer = (MsgBuffer*)sender;
-    int rc = mtmsg_buffer_next_msg(NULL /* L */, buffer, nonblock, 0 /* arg */,
-                                   timeoutSeconds, &reader->mem, NULL /* args_size */);
+    int rc = mtmsg_buffer_next_msg(NULL /* L */, NULL /* udata */,
+                                   buffer, nonblock, 0 /* arg */,
+                                   timeoutSeconds, &reader->mem, NULL /* args_size */,
+                                   eh, ehdata);
     if (rc >= 0) {
         return (rc > 0) ? 0 : 3; /*  3 - if next message is not available */
     } else {

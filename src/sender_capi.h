@@ -2,16 +2,18 @@
 #define SENDER_CAPI_H
 
 #define SENDER_CAPI_ID_STRING     "_capi_sender"
-#define SENDER_CAPI_VERSION_MAJOR  0
+#define SENDER_CAPI_VERSION_MAJOR  1
 #define SENDER_CAPI_VERSION_MINOR  0
-#define SENDER_CAPI_VERSION_PATCH  1
+#define SENDER_CAPI_VERSION_PATCH  0
 
-typedef struct sender_object          sender_object;
-typedef struct sender_reader          sender_reader;
-typedef struct sender_capi            sender_capi;
-typedef enum   sender_capi_value_type sender_capi_value_type;
-typedef struct sender_capi_value      sender_capi_value;
-
+#ifndef SENDER_CAPI_HAVE_LONG_LONG
+#  include <limits.h>
+#  if defined(LLONG_MAX)
+#    define SENDER_CAPI_HAVE_LONG_LONG 1
+#  else
+#    define SENDER_CAPI_HAVE_LONG_LONG 0
+#  endif
+#endif
 
 #ifndef SENDER_CAPI_IMPLEMENT_SET_CAPI
 #  define SENDER_CAPI_IMPLEMENT_SET_CAPI 0
@@ -20,6 +22,13 @@ typedef struct sender_capi_value      sender_capi_value;
 #ifndef SENDER_CAPI_IMPLEMENT_GET_CAPI
 #  define SENDER_CAPI_IMPLEMENT_GET_CAPI 0
 #endif
+
+typedef struct sender_object          sender_object;
+typedef struct sender_reader          sender_reader;
+typedef struct sender_capi            sender_capi;
+typedef enum   sender_capi_value_type sender_capi_value_type;
+typedef struct sender_capi_value      sender_capi_value;
+typedef enum   sender_array_type      sender_array_type;
 
 enum sender_capi_value_type
 {
@@ -30,7 +39,31 @@ enum sender_capi_value_type
     SENDER_CAPI_TYPE_NUMBER,
     SENDER_CAPI_TYPE_LIGHTUSERDATA,
     SENDER_CAPI_TYPE_CFUNCTION,
-    SENDER_CAPI_TYPE_STRING
+    SENDER_CAPI_TYPE_STRING,
+    SENDER_CAPI_TYPE_ARRAY
+};
+
+enum sender_array_type
+{
+    SENDER_UCHAR  =  1,
+    SENDER_SCHAR  =  2,
+    
+    SENDER_SHORT  =  3,
+    SENDER_USHORT =  4,
+    
+    SENDER_INT    =  5,
+    SENDER_UINT   =  6,
+    
+    SENDER_LONG   =  7,
+    SENDER_ULONG  =  8,
+    
+    SENDER_FLOAT  =  9,
+    SENDER_DOUBLE = 10,
+
+#if SENDER_CAPI_HAVE_LONG_LONG
+    SENDER_LLONG  = 11,
+    SENDER_ULLONG = 12,
+#endif
 };
 
 struct sender_capi_value
@@ -43,9 +76,15 @@ struct sender_capi_value
         void*         ptrVal;
         lua_CFunction funcVal;
         struct {
-            const char* ptr;
-            size_t      len;
-        }           strVal;
+            const char*       ptr;
+            size_t            len;
+         }            strVal;
+        struct {
+            sender_array_type type;
+            size_t            elementSize;
+            size_t            elementCount;
+            const void*       data;
+        }             arrayVal;
     };
 };
 

@@ -63,6 +63,7 @@
 #include "async_util.h"
 #include "compat-5.3.h"
 
+typedef struct carray_capi carray_capi;
 
 lua_Number mtmsg_current_time_seconds();
 

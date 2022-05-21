@@ -6,9 +6,14 @@
 
 static const char* const MTMSG_READER_CLASS_NAME = "mtmsg.reader";
 
-typedef struct ReaderUserData {
-    MemBuffer mem;
-} ReaderUserData;
+typedef struct carray_capi    carray_capi;
+typedef struct ReaderUserData ReaderUserData;
+
+struct ReaderUserData 
+{
+    MemBuffer          mem;
+    const carray_capi* carrayCapi;
+};
 
 static void setupReaderMeta(lua_State* L);
 
@@ -88,9 +93,9 @@ static int Reader_next(lua_State* L)
                        par.inMaxArgCount  = count;
                        par.parsedLength   = 0;
                        par.parsedArgCount = 0;
-
+                       par.carrayCapi     = udata->carrayCapi;
     mtmsg_serialize_get_msg_args2(L, &par);
-
+    udata->carrayCapi = par.carrayCapi;
     udata->mem.bufferLength -= par.parsedLength;
     if (udata->mem.bufferLength == 0) {
         udata->mem.bufferStart = udata->mem.bufferData;
@@ -121,10 +126,12 @@ static int Reader_nextMsg(lua_State* L)
     
     size_t args_size = 0;
     int rc = 0;
-    if (budata) {    
-        rc = mtmsg_buffer_next_msg  (L, budata->buffer, budata->nonblock, arg, 0 /* timeout from arg */, &rudata->mem, &args_size);
+    if (budata) {
+        if (!rudata->carrayCapi) rudata->carrayCapi = budata->carrayCapi;
+        rc = mtmsg_buffer_next_msg  (L, budata, budata->buffer, budata->nonblock, arg, 0 /* timeout from arg */, &rudata->mem, &args_size, NULL, NULL);
     } else {
-        rc = mtmsg_listener_next_msg(L, ludata->listener, ludata->nonblock, arg, &rudata->mem, &args_size);
+        if (!rudata->carrayCapi) rudata->carrayCapi = ludata->carrayCapi;
+        rc = mtmsg_listener_next_msg(L, ludata, ludata->listener, ludata->nonblock, arg, &rudata->mem, &args_size);
     }
     if (rc < 0) {
         if (rc == -4) {

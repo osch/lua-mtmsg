@@ -403,7 +403,8 @@ static int MsgListener_newBuffer(lua_State* L)
 }
 
 
-int mtmsg_listener_next_msg(lua_State* L, MsgListener* listener, bool nonblock, int arg, 
+int mtmsg_listener_next_msg(lua_State* L, ListenerUserData* udata,
+                            MsgListener* listener, bool nonblock, int arg, 
                             MemBuffer* resultBuffer, size_t* argsSize)
 {
     lua_Number endTime   = 0; /* 0 = no timeout */
@@ -455,6 +456,7 @@ again:
                                        par.inMaxArgCount  = -1;
                                        par.parsedLength   = 0;
                                        par.parsedArgCount = 0;
+                                       par.carrayCapi     = udata->carrayCapi;
                     lua_pushcfunction(L, mtmsg_serialize_get_msg_args);
                     lua_pushlightuserdata(L, &par);
                     int rc = lua_pcall(L, 1, LUA_MULTRET, 0);
@@ -463,6 +465,7 @@ again:
                         return lua_error(L);
                     }
                     rslt = par.parsedArgCount;
+                    udata->carrayCapi = par.carrayCapi;
                     msg_size = sizes.header_size + par.parsedLength;
                 } else {
                     int rc = mtmsg_membuf_reserve(resultBuffer, sizes.args_size);
@@ -494,10 +497,24 @@ again:
                     b->mem.bufferStart  += msg_size;
                     mtmsg_buffer_add_to_ready_list(listener, b);
                 }
+                b->msgCount -= 1;
                 if (listener->firstReadyBuffer) {
                     async_mutex_notify(&listener->listenerMutex);
                 }
+                NotifierHolder* ntf = b->decNotifier;
+                if (ntf) {
+                    if (ntf->threshold <= 0 || b->msgCount < ntf->threshold) {
+                        atomic_inc(&ntf->used);
+                    } else {
+                        ntf = NULL;
+                    }
+                }
+                
                 async_mutex_unlock(&listener->listenerMutex);
+                
+                if (ntf) {
+                    mtmsg_buffer_call_notifier(L, b, ntf, &b->decNotifier, NULL, NULL);
+                }
                 return rslt;
             }
             else
@@ -528,7 +545,7 @@ static int MsgListener_nextMsg(lua_State* L)
     int arg = 1;
     ListenerUserData* udata = luaL_checkudata(L, arg++, MTMSG_LISTENER_CLASS_NAME);
     
-    int parsedArgCount = mtmsg_listener_next_msg(L, udata->listener, udata->nonblock, arg, NULL, NULL);
+    int parsedArgCount = mtmsg_listener_next_msg(L, udata, udata->listener, udata->nonblock, arg, NULL, NULL);
     return parsedArgCount; /* parsedArgCount because resultBuffer is NULL */
 }
 

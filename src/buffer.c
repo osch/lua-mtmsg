@@ -342,9 +342,15 @@ static void freeBuffer2(MsgBuffer* b)
     if (b->bufferName) {
         free(b->bufferName);
     }
-    if (b->notifierHolder && atomic_dec(&b->notifierHolder->used) <= 0) {
-        b->notifierHolder->notifyapi->releaseNotifier(b->notifierHolder->notifier);
-        free(b->notifierHolder);
+    if (b->decNotifier && atomic_dec(&b->decNotifier->used) <= 0) {
+        b->decNotifier->notifyapi->releaseNotifier(b->decNotifier->notifier);
+        free(b->decNotifier);
+        b->decNotifier = NULL;
+    }
+    if (b->incNotifier && atomic_dec(&b->incNotifier->used) <= 0) {
+        b->incNotifier->notifyapi->releaseNotifier(b->incNotifier->notifier);
+        free(b->incNotifier);
+        b->incNotifier = NULL;
     }
     mtmsg_membuf_free(&b->mem);
     free(b);
@@ -542,6 +548,7 @@ static int MsgBuffer_clear(lua_State* L)
         return mtmsg_ERROR_OBJECT_CLOSED(L, qstring);
     }
     b->mem.bufferLength = 0;
+    b->msgCount = 0;
     
     if (b->listener) {
         mtmsg_buffer_remove_from_ready_list(b->listener, b, false);
@@ -593,6 +600,67 @@ static int pushNotifyErrorMessage(lua_State* L)
     return 1;
 }
 
+int mtmsg_buffer_call_notifier(lua_State* L, MsgBuffer* b, NotifierHolder* ntf, NotifierHolder** targNtf,
+                               receiver_error_handler receiver_eh, void* receiver_ehdata)
+{
+    if (L) {
+        luaL_checkstack(L, 10, NULL);
+    }
+    notify_error_handler_data notify_ehdata = { NULL, 0 };
+    int rc = ntf->notifyapi->notify(ntf->notifier, 
+                                    notify_error_handler, &notify_ehdata);
+    if (rc == 1) {
+        /* notifier should not be called again */
+        async_mutex_lock(b->sharedMutex);
+        if (*targNtf == ntf) {
+            atomic_dec(&ntf->used);
+            *targNtf = NULL;
+        }
+        async_mutex_unlock(b->sharedMutex);
+    }
+    if (atomic_dec(&ntf->used) <= 0) {
+        ntf->notifyapi->releaseNotifier(ntf->notifier);
+        free(ntf);
+    }
+    bool isError = (rc != 0 && rc != 1);
+    if (notify_ehdata.buffer) {
+        if (L && isError) {
+            lua_pushcfunction(L, pushNotifyErrorMessage);
+            lua_pushlightuserdata(L, &notify_ehdata);
+            lua_pcall(L, 1, 1, 0);
+            free(notify_ehdata.buffer);
+            return lua_error(L);
+        } else {
+            if (receiver_eh) {
+                receiver_eh(receiver_ehdata, notify_ehdata.buffer, notify_ehdata.len);
+            }
+            free(notify_ehdata.buffer);
+            if (isError) {
+                return 999;
+            }
+        }
+    } else if (isError) {
+        if (L) {
+            return luaL_error(L, "Unknown error while calling notifier. (rc=%d)", rc);
+        }
+        else {
+            if (receiver_eh) {
+                char errmsg[80];
+                int len = 
+            #if _XOPEN_SOURCE >= 500 || _ISOC99_SOURCE || __STDC_VERSION__ >= 199901L
+                    snprintf(errmsg, sizeof(errmsg),
+            #else
+                    sprintf(errmsg,
+            #endif
+                        "Unknown error while calling notifier. (rc=%d)", rc);
+                        
+                receiver_eh(receiver_ehdata, errmsg, len);
+            }
+            return 999;
+        }
+    }
+    return 0;
+}
 
 int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b, 
                                               bool nonblock, bool clear, int arg, 
@@ -635,6 +703,7 @@ int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b,
     }
     if (clear) {
         b->mem.bufferLength = 0;
+        b->msgCount = 0;
     }
     {
         int rc = mtmsg_membuf_reserve(&b->mem, msg_size);
@@ -674,78 +743,29 @@ int mtmsg_buffer_set_or_add_msg(lua_State* L, MsgBuffer* b,
         memcpy(msgBufferStart + header_size, args, args_size);
     }
     b->mem.bufferLength += msg_size;
+    b->msgCount += 1;
 
     if (b->listener && !mtmsg_is_on_ready_list(b->listener, b)) {
         mtmsg_buffer_add_to_ready_list(b->listener, b);
     }
 
-    NotifierHolder* notifierHolder = b->notifierHolder;
-    if (notifierHolder) {
-        atomic_inc(&notifierHolder->used);
+    NotifierHolder* ntf = b->incNotifier;
+    if (ntf) {
+        if (b->msgCount > ntf->threshold) {
+            atomic_inc(&ntf->used);
+        } else {
+            ntf = NULL;
+        }
     }
     
     async_mutex_notify(b->sharedMutex);
     async_mutex_unlock(b->sharedMutex);
     
-    if (notifierHolder) {
-        if (L) {
-            luaL_checkstack(L, 10, NULL);
-        }
-        notify_error_handler_data notify_ehdata = { NULL, 0 };
-        int rc = notifierHolder->notifyapi->notify(notifierHolder->notifier, 
-                                                   notify_error_handler, &notify_ehdata);
-        if (rc == 1) {
-            /* notifier should not be called again */
-            async_mutex_lock(b->sharedMutex);
-            if (b->notifierHolder == notifierHolder) {
-                atomic_dec(&notifierHolder->used);
-                b->notifierHolder = NULL;
-            }
-            async_mutex_unlock(b->sharedMutex);
-        }
-        if (atomic_dec(&notifierHolder->used) <= 0) {
-            notifierHolder->notifyapi->releaseNotifier(notifierHolder->notifier);
-            free(notifierHolder);
-        }
-        bool isError = (rc != 0 && rc != 1);
-        if (notify_ehdata.buffer) {
-            if (L && isError) {
-                lua_pushcfunction(L, pushNotifyErrorMessage);
-                lua_pushlightuserdata(L, &notify_ehdata);
-                lua_pcall(L, 1, 1, 0);
-                free(notify_ehdata.buffer);
-                return lua_error(L);
-            } else {
-                if (receiver_eh) {
-                    receiver_eh(receiver_ehdata, notify_ehdata.buffer, notify_ehdata.len);
-                }
-                free(notify_ehdata.buffer);
-                if (isError) {
-                    return 999;
-                }
-            }
-        } else if (isError) {
-            if (L) {
-                return luaL_error(L, "Unknown error while calling notifier. (rc=%d)", rc);
-            }
-            else {
-                if (receiver_eh) {
-                    char errmsg[80];
-                    int len = 
-                #if _XOPEN_SOURCE >= 500 || _ISOC99_SOURCE || __STDC_VERSION__ >= 199901L
-                        snprintf(errmsg, sizeof(errmsg),
-                #else
-                        sprintf(errmsg,
-                #endif
-                            "Unknown error while calling notifier. (rc=%d)", rc);
-                            
-                    receiver_eh(receiver_ehdata, errmsg, len);
-                }
-                return 999;
-            }
-        }
+    if (ntf) {
+        return mtmsg_buffer_call_notifier(L, b, ntf, &b->incNotifier, receiver_eh, receiver_ehdata);
+    } else {
+        return 0;
     }
-    return 0;
 }
 
 
@@ -769,7 +789,9 @@ static int MsgBuffer_addMsg(lua_State* L)
 }
 
     
-int mtmsg_buffer_next_msg(lua_State* L, MsgBuffer* b, bool nonblock, int arg, double timeoutSeconds , MemBuffer* resultBuffer, size_t* argsSize)
+int mtmsg_buffer_next_msg(lua_State* L, BufferUserData* udata,
+                          MsgBuffer* b, bool nonblock, int arg, double timeoutSeconds , MemBuffer* resultBuffer, size_t* argsSize,
+                          sender_error_handler sender_eh, void* sender_ehdata)
 {
     lua_Number endTime   = 0; /* 0 = no timeout */
 
@@ -826,6 +848,7 @@ again:
                                par.inMaxArgCount  = -1;
                                par.parsedLength   = 0;
                                par.parsedArgCount = 0;
+                               par.carrayCapi     = udata->carrayCapi;
             lua_pushcfunction(L, mtmsg_serialize_get_msg_args);
             lua_pushlightuserdata(L, &par);
             int rc = lua_pcall(L, 1, LUA_MULTRET, 0);
@@ -834,6 +857,7 @@ again:
                 return lua_error(L);
             }
             rslt = par.parsedArgCount;
+            udata->carrayCapi = par.carrayCapi;
             msg_size = sizes.header_size + par.parsedLength;
         } else {
             int rc = mtmsg_membuf_reserve(resultBuffer, sizes.args_size);
@@ -861,14 +885,31 @@ again:
         if (b->listener) {
             mtmsg_buffer_remove_from_ready_list(b->listener, b, false);
         }
+        b->msgCount -= 1;
         if (b->mem.bufferLength > 0) {
             if (b->listener) {
                 mtmsg_buffer_add_to_ready_list(b->listener, b);
             }
             async_mutex_notify(b->sharedMutex);         
         }
+
+        NotifierHolder* ntf = b->decNotifier;
+        if (ntf) {
+            if (ntf->threshold <= 0 || b->msgCount < ntf->threshold) {
+                atomic_inc(&ntf->used);
+            } else {
+                ntf = NULL;
+            }
+        }
+        
         async_mutex_unlock(b->sharedMutex);
-    
+
+        if (ntf) {
+            int rc2 = mtmsg_buffer_call_notifier(L, b, ntf, &b->decNotifier, sender_eh, sender_ehdata);
+            if (rc2 != 0) {
+                return -999;
+            }
+        }
         return rslt;
     } else {
         if (endTime > 0) {
@@ -897,7 +938,8 @@ static int MsgBuffer_nextMsg(lua_State* L)
     int arg = 1;
     BufferUserData* udata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
     
-    int parsedArgCount = mtmsg_buffer_next_msg(L, udata->buffer, udata->nonblock, arg, 0 /* timeout from arg */, NULL, NULL);
+    int parsedArgCount = mtmsg_buffer_next_msg(L, udata, udata->buffer, udata->nonblock, arg, 0 /* timeout from arg */, NULL, NULL,
+                                                  NULL, NULL);
     return parsedArgCount; /* parsedArgCount because resultBuffer is NULL */
 }
 
@@ -961,23 +1003,37 @@ static int Mtmsg_notifier(lua_State* L)
     else {
         return luaL_argerror(L, arg, "notifier or nil expected");
     }
+    int threshold = 0;
+    int opt = 1;
+    
+    static const char* const opts[] = { "<", ">", NULL};
+    if (!lua_isnoneornil(L, arg)) {
+        opt = luaL_checkoption(L, arg++, NULL, opts);
+        if (!lua_isnoneornil(L, arg)) {
+            threshold = luaL_checkinteger(L, arg);
+        }
+    }
     async_mutex_lock(b->sharedMutex);
     {
+        NotifierHolder** targNtf = (opt == 0) ? &b->decNotifier 
+                                              : &b->incNotifier;
+        NotifierHolder*  oldNtf = *targNtf;
+        
         if (b->closed) {
             async_mutex_unlock(b->sharedMutex);
             const char* qstring = mtmsg_buffer_tostring(L, b);
             return mtmsg_ERROR_OBJECT_CLOSED(L, qstring);
         }
-        else if (b->notifierHolder && notifier) {
+        else if (oldNtf && notifier) {
             async_mutex_unlock(b->sharedMutex);
             return mtmsg_MTMSG_ERROR_HAS_NOTIFIER(L);
         }
-        else if (b->notifierHolder) {
-            if (atomic_dec(&b->notifierHolder->used) <= 0) {
-                b->notifierHolder->notifyapi->releaseNotifier(b->notifierHolder->notifier);
-                free(b->notifierHolder);
+        else if (oldNtf) {
+            if (atomic_dec(&oldNtf->used) <= 0) {
+                oldNtf->notifyapi->releaseNotifier(oldNtf->notifier);
+                free(oldNtf);
             }
-            b->notifierHolder = NULL;
+            *targNtf = NULL;
         }
         else if (notifier) {
             NotifierHolder* notifierHolder = calloc(1, sizeof(NotifierHolder));
@@ -985,11 +1041,12 @@ static int Mtmsg_notifier(lua_State* L)
                 async_mutex_unlock(b->sharedMutex);
                 return mtmsg_ERROR_OUT_OF_MEMORY(L);
             }
-            notifierHolder->used      = 1;
-            notifierHolder->notifier  = notifier;
-            notifierHolder->notifyapi = notifyapi;
+            notifierHolder->used           = 1;
+            notifierHolder->notifier       = notifier;
+            notifierHolder->notifyapi      = notifyapi;
+            notifierHolder->threshold = threshold;
 
-            b->notifierHolder = notifierHolder;
+            *targNtf = notifierHolder;
 
             notifyapi->retainNotifier(notifier);
         }
@@ -1071,6 +1128,19 @@ static int MsgBuffer_isAbort(lua_State* L)
     return 1;
 }
 
+static int MsgBuffer_msgcnt(lua_State* L)
+{
+    int arg = 1;
+    BufferUserData* udata = luaL_checkudata(L, arg++, MTMSG_BUFFER_CLASS_NAME);
+    MsgBuffer*      b = udata->buffer;
+
+    async_mutex_lock(b->sharedMutex);
+    lua_pushinteger(L, b->msgCount);
+    async_mutex_unlock(b->sharedMutex);
+
+    return 1;
+}
+
 static const luaL_Reg MsgBufferMethods[] = 
 {
     { "addmsg",     MsgBuffer_addMsg     },
@@ -1085,6 +1155,7 @@ static const luaL_Reg MsgBufferMethods[] =
     { "close",      MsgBuffer_close      },
     { "abort",      MsgBuffer_abort      },
     { "isabort",    MsgBuffer_isAbort    },
+    { "msgcnt",     MsgBuffer_msgcnt     },
     { NULL,         NULL } /* sentinel */
 };
 

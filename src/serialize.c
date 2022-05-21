@@ -1,3 +1,9 @@
+#include "util.h"
+
+#define CARRAY_CAPI_IMPLEMENT_GET_CAPI 1
+#define CARRAY_CAPI_IMPLEMENT_REQUIRE_CAPI 1
+#include "carray_capi.h"
+
 #include "serialize.h"
 
 size_t mtmsg_serialize_calc_args_size(lua_State* L, int firstArg, int* errorArg)
@@ -41,9 +47,28 @@ size_t mtmsg_serialize_calc_args_size(lua_State* L, int firstArg, int* errorArg)
                     rslt += MTMSG_ARG_SIZE_CFUNCTION;
                     break;
                 }
-            } /* FALLTHROUGH */
+            } 
+            case LUA_TUSERDATA: {
+                int errorReason;
+                const carray_capi* carrayCapi = carray_get_capi(L, i, &errorReason);
+                if (carrayCapi) {
+                    carray_info info;
+                    const carray* a = carrayCapi->toReadableCarray(L, i, &info);
+                    if (a) {
+                        rslt += mtmsg_serialize_calc_carray_size(&info);
+                        break;
+                    } else {
+                        /* FALLTHROUGH */
+                    }
+                } else if (errorReason == 1) {
+                    return luaL_argerror(L, i, "carray version mismatch");
+                } else {
+                    /* FALLTHROUGH */
+                }
+            }
+
+            /* FALLTHROUGH */
             case LUA_TTABLE:
-            case LUA_TUSERDATA:
             case LUA_TTHREAD:
             default: {
                 *errorArg = i;
@@ -97,6 +122,26 @@ void mtmsg_serialize_args_to_buffer(lua_State* L, int firstArg, char* buffer)
                 if (func) {
                     buffer = mtmsg_serialize_cfunction_to_buffer(func, buffer);
                     break;
+                }
+            }
+            case LUA_TUSERDATA: {
+                int errorReason;
+                const carray_capi* carrayCapi = carray_get_capi(L, i, &errorReason);
+                if (carrayCapi) {
+                    carray_info info;
+                    const carray* a = carrayCapi->toReadableCarray(L, i, &info);
+                    if (a) {
+                        const void* data= carrayCapi->getReadableElementPtr(a, 0, info.elementCount);
+                        buffer = mtmsg_serialize_carray_to_buffer(&info, data, buffer);
+                        break;
+                    } else {
+                        /* FALLTHROUGH */
+                    }
+                } else if (errorReason == 1) {
+                    luaL_argerror(L, i, "carray version mismatch");
+                    return;
+                } else {
+                    /* FALLTHROUGH */
                 }
             }
             default: {
@@ -189,6 +234,24 @@ int mtmsg_serialize_get_msg_args2(lua_State* L, GetMsgArgsPar* par)
                 memcpy(&value, buffer + p, sizeof(lua_CFunction));
                 p += sizeof(lua_CFunction);
                 lua_pushcfunction(L, value);
+                break;
+            }
+            case BUFFER_CARRAY: {
+                if (!par->carrayCapi) {
+                    par->carrayCapi = carray_require_capi(L);
+                }
+                carray_type   type         = (unsigned char)buffer[p++];
+                unsigned char elementSize  = (unsigned char)buffer[p++];;
+                size_t        elementCount;
+                memcpy(&elementCount, buffer + p, sizeof(size_t));
+                p += sizeof(size_t);
+                void* data;
+                if (!par->carrayCapi->newCarray(L, type, CARRAY_DEFAULT, elementCount, &data)) {
+                    luaL_error(L, "internal error creating carray for type %d", type);
+                }
+                size_t len = elementSize * elementCount;
+                memcpy(data, buffer + p, len);
+                p += len;
                 break;
             }
             default: {

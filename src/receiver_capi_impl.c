@@ -2,6 +2,7 @@
 #include "buffer.h"
 #include "main.h"
 #include "serialize.h"
+#include "carray_capi.h"
 
 struct receiver_writer
 {
@@ -131,6 +132,51 @@ static int addBytesToWriter(receiver_writer* writer, const unsigned char* value,
     return rc;
 }
 
+static void* addArrayToWriter(receiver_writer* writer, receiver_array_type type, 
+                              size_t elementCount)
+{
+    carray_type carrayType = 0;
+    size_t elementSize = 0;
+    switch (type) {
+        case RECEIVER_UCHAR: carrayType = CARRAY_UCHAR; elementSize = sizeof(unsigned char); break;
+        case RECEIVER_SCHAR: carrayType = CARRAY_SCHAR; elementSize = sizeof(signed char); break;
+        
+        case RECEIVER_SHORT:  carrayType = CARRAY_SHORT;  elementSize = sizeof(short); break;
+        case RECEIVER_USHORT: carrayType = CARRAY_USHORT; elementSize = sizeof(unsigned short); break;
+        
+        case RECEIVER_INT:    carrayType = CARRAY_INT;  elementSize = sizeof(int); break;
+        case RECEIVER_UINT:   carrayType = CARRAY_UINT; elementSize = sizeof(unsigned int); break;
+        
+        case RECEIVER_LONG:   carrayType = CARRAY_LONG;  elementSize = sizeof(long); break;
+        case RECEIVER_ULONG:  carrayType = CARRAY_ULONG; elementSize = sizeof(unsigned long); break;
+        
+        case RECEIVER_FLOAT:  carrayType = CARRAY_FLOAT;   elementSize = sizeof(float); break;
+        case RECEIVER_DOUBLE: carrayType = CARRAY_DOUBLE;  elementSize = sizeof(double); break;
+    
+    #if RECEIVER_CAPI_HAVE_LONG_LONG
+        case RECEIVER_LLONG:  carrayType = CARRAY_LLONG;   elementSize = sizeof(long long); break;
+        case RECEIVER_ULLONG: carrayType = CARRAY_ULLONG;  elementSize = sizeof(unsigned long long); break;
+    #endif
+        default: return NULL;
+    }
+    carray_info info = {0};
+    info.type = carrayType;
+    info.elementSize  = elementSize;
+    info.elementCount = elementCount;
+    size_t args_size = mtmsg_serialize_calc_carray_size(&info);
+    int rc = mtmsg_membuf_reserve(&writer->mem, args_size);
+    if (rc == 0) {
+        char* bufferData = writer->mem.bufferStart + writer->mem.bufferLength;
+        bufferData = mtmsg_serialize_carray_header_to_buffer(&info, bufferData);
+        writer->mem.bufferLength += args_size;
+        return bufferData;
+    } else {
+        return NULL;
+    }
+
+}
+
+
 static int msgToReceiver(receiver_object* buffer, receiver_writer* writer, 
                          int clear, int nonblock,
                          receiver_error_handler eh, void* ehdata)
@@ -166,4 +212,5 @@ const receiver_capi mtmsg_receiver_capi_impl =
     addIntegerToWriter,
     addStringToWriter,
     addBytesToWriter,
+    addArrayToWriter
 };

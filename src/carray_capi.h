@@ -11,7 +11,7 @@
 #endif
 
 #define CARRAY_CAPI_ID_STRING     "_capi_carray"
-#define CARRAY_CAPI_VERSION_MAJOR   0
+#define CARRAY_CAPI_VERSION_MAJOR  -1
 #define CARRAY_CAPI_VERSION_MINOR   0
 #define CARRAY_CAPI_VERSION_PATCH   1
 
@@ -117,14 +117,12 @@ struct carray_capi
      * releaseCallback - is called by the carray object if the reference to the underlying
      *                   data is not any longer needed. This callback may also be NULL
      *                   for the case of static data.
-     * resizeCallback  - may be NULL if the content is readonly or not resizable.
      *
      * Returns NULL pointer on parameter error.
      * This function may also raise a Lua error.
      */
     carray* (*newCarrayRef)(lua_State* L, carray_type t, carray_attr attr, void* dataRef, size_t elementCount,
-                            void (*releaseCallback)(void* dataRef, size_t elementCount),
-                            void* (*resizeCallback)(void* dataRef, size_t oldElementCount, size_t newElementCount));
+                            void (*releaseCallback)(void* dataRef, size_t elementCount));
     
     /**
      * Returns a valid pointer if the Lua object at the given stack

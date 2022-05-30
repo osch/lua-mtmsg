@@ -69,6 +69,7 @@ static void freeReader(sender_reader* reader)
 {
     if (reader) {
         mtmsg_membuf_free(&reader->mem);
+        free(reader);
     }
 }
 

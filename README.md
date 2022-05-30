@@ -359,7 +359,7 @@ assert(lst:nextmsg(0) == nil)
   Possible errors: *mtmsg.error.object_closed*
 
 
-* **`buffer:nextmsg([timeout])`**
+* **`buffer:nextmsg([timeout][, carray]*)`**
 
   Returns all the arguments that were given as one message by invoking the method
   *buffer:addmsg()* or *buffer:setmsg()*. The returned message is removed
@@ -368,10 +368,15 @@ assert(lst:nextmsg(0) == nil)
   * *timeout* optional float, maximal time in seconds for waiting for the next 
     message. The method returns without result if timeout is reached.
   
-  If no timeout is given and *buffer:isnonblock() == false* then this methods waits
-  without timeout limit until a next message becomes available.
+  * *carray* optional one or more [carray] objects. These objects are reused 
+             if the message contains an array of the corresponding data type 
+             of the given *carray*. Unused *carray* objects are reset to length 0
+             after this call.
+  
+  If timeout is not given or *nil* and *buffer:isnonblock() == false* then this 
+  methods waits without timeout limit forever until a next message becomes available.
 
-  If no timeout is given and *buffer:isnonblock() == true* then this method
+  If timeout is not given or *nil* and *buffer:isnonblock() == true* then this method
   returns immediately without result if no next message is available or if the
   buffer is concurrently accessed from another thread.
 
@@ -492,7 +497,7 @@ assert(lst:nextmsg(0) == nil)
   Possible errors: *mtmsg.error.operation_aborted*
 
 
-* **`listener:nextmsg([timeout])`**
+* **`listener:nextmsg([timeout][, carray]*)`**
 
   Returns all the arguments that were given as one message by invoking the method
   *buffer:addmsg()* or *buffer:setmsg()* to one of the buffers that are
@@ -502,10 +507,15 @@ assert(lst:nextmsg(0) == nil)
   * *timeout* optional float, maximal time in seconds for waiting for the next 
     message. The method returns without result if timeout is reached.
 
-  If no timeout is given and *listener:isnonblock() == false* then this methods waits
-  without timeout limit until a next message becomes available.
+  * *carray* optional one or more [carray] objects. These objects are reused 
+             if the message contains an array of the corresponding data type 
+             of the given *carray*. Unused *carray* objects are reset to length 0
+             after this call.
+  
+  If timeout is not given or *nil* and *listener:isnonblock() == false* then this 
+  methods waits without timeout limit forever until a next message becomes available.
 
-  If no timeout is given and *listener:isnonblock() == true* then this methods
+  If timeout is not given or *nil* and *listener:isnonblock() == true* then this methods
   returns immediately without result if no next message is available or if the
   listener is concurrently accessed from another thread.
 
@@ -653,14 +663,19 @@ is equivalent to
     local a, b, c = buffer:nextmsg()
 ```
 
-* **`reader:next([count])`**
+* **`reader:next([count][, carray]*)`**
 
-  Returns next message elements from the reader. Returns nothing no more message elements 
+  Returns next message elements from the reader. Returns nothing if no more message elements 
   are available. The returned elements are removed from the reader's internal list of message
   elements.
 
   * *count* - optional integer, the maximaum number of message elements to be returned
               (defaults to 1).
+
+  * *carray* optional one or more [carray] objects. These objects are reused 
+             if the message contains an array of the corresponding data type 
+             of the given *carray*. Unused *carray* objects are reset to length 0
+             after this call.
 
 * **`reader:nextmsg(buffer|listener, [timeout])`**
 

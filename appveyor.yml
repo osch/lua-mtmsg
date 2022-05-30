@@ -1,7 +1,6 @@
 version: 0.3.2.{build}
 
-os:
-- Windows Server 2012 R2
+image: Windows Server 2012 R2
 
 shallow_clone: true
 
@@ -12,6 +11,7 @@ environment:
   - LUA: "lua 5.1"
   - LUA: "lua 5.2"
   - LUA: "lua 5.3"
+  - LUA: "lua 5.4"
 
 platform:
   - x64
@@ -24,7 +24,13 @@ cache:
 
 install:
   - echo "Setup..."
-  - set PATH=C:\Python27\Scripts;%LR_EXTERNAL%;%PATH%
+  - set PATH=C:\Python38\;C:\Python38\Scripts;%LR_EXTERNAL%;%PATH%
+  - where py
+  - py --version
+  - where python
+  - python --version
+  - where pip
+  - pip --version
   - if /I "%platform%"=="x86" set HR_TARGET=vs_32
   - if /I "%platform%"=="x64" set HR_TARGET=vs_64
   - if /I "%platform%"=="mingw" set HR_TARGET=mingw
@@ -34,10 +40,9 @@ install:
       mkdir "%LR_EXTERNAL%\lib" &&
       mkdir "%LR_EXTERNAL%\include"
     )
-  - if not exist c:\hererocks (
-      pip install hererocks &&
-      hererocks c:\hererocks --%LUA% --target %HR_TARGET% -rlatest
-    )
+  - python -m pip install --upgrade pip
+  - pip install git+https://github.com/luarocks/hererocks@0.25.0
+  - hererocks c:\hererocks --%LUA% --target %HR_TARGET% -rlatest
   - call c:\hererocks\bin\activate
 
 before_build:
@@ -46,6 +51,7 @@ before_build:
 build_script:
   - echo "Making..."
   - luarocks install lua-llthreads2
+  - luarocks --server=https://luarocks.org/dev install carray
   - luarocks make rockspecs/mtmsg-scm-0.rockspec
 
 before_test:
@@ -74,6 +80,7 @@ test_script:
   - lua test10.lua
   - lua test11.lua
   - lua test12.lua
+  - lua test13.lua
 
 after_test:
   # deploy

@@ -33,6 +33,7 @@ typedef struct GetMsgArgsPar {
     size_t             parsedLength;
     int                parsedArgCount;
     const carray_capi* carrayCapi;
+    int                errorArg;
 } GetMsgArgsPar;
 
 typedef struct SerializedMsgSizes {
@@ -148,7 +149,6 @@ static inline char* mtmsg_serialize_carray_to_buffer(carray_info* info, const vo
 void mtmsg_serialize_args_to_buffer(lua_State* L, int firstArg, char* buffer);
 
 int mtmsg_serialize_get_msg_args(lua_State* L);
-int mtmsg_serialize_get_msg_args2(lua_State*   L, GetMsgArgsPar* par);
 
 typedef enum {
     BUFFER_MSGSIZE = 0xff

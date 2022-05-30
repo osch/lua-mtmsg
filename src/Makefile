@@ -11,7 +11,7 @@ LNX_COPTS   :=
 WIN_COPTS   := -I/mingw64/include/lua5.1 
 MAC_COPTS   := -I/usr/local/opt/lua/include/lua5.3 
 
-LNX_LOPTS   := -lpthread
+LNX_LOPTS   := -g -lpthread
 WIN_LOPTS   := -lkernel32
 MAC_LOPTS   := -lpthread
 

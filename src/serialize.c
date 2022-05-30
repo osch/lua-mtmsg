@@ -151,15 +151,25 @@ void mtmsg_serialize_args_to_buffer(lua_State* L, int firstArg, char* buffer)
     }
 }
 
+int raiseCarrayError(lua_State* L, const carray_capi* capi, int reason)
+{
+    if (!capi && reason == 1) {
+        return luaL_error(L, "incompatible carray capi version number");
+    } else if (!capi) {
+        return luaL_error(L, "carray expected");
+    } else {
+        return luaL_error(L, "writable carray expected");
+    }
+}
+
 int mtmsg_serialize_get_msg_args(lua_State* L)
 {
-    GetMsgArgsPar* par = (GetMsgArgsPar*)lua_touserdata(L, 1);
-
-    return mtmsg_serialize_get_msg_args2(L, par);
-}
+    int arg    = 1;
+    int argTop = lua_gettop(L);
     
-int mtmsg_serialize_get_msg_args2(lua_State* L, GetMsgArgsPar* par)
-{
+    GetMsgArgsPar* par = (GetMsgArgsPar*)lua_touserdata(L, arg++);
+    
+
     const char*    buffer       = par->inBuffer;
     const size_t   bufferSize   = par->inBufferSize;
     const int      maxArgCount  = par->inMaxArgCount;
@@ -173,6 +183,22 @@ int mtmsg_serialize_get_msg_args2(lua_State* L, GetMsgArgsPar* par)
             par->parsedLength   = p;
             par->parsedArgCount = i; 
             luaL_checkstack(L, LUA_MINSTACK, NULL);
+            while (arg <= argTop) {
+                if (!lua_isnil(L, arg)) {
+                    int                reason = 0;
+                    const carray_capi* capi   = carray_get_capi(L, arg, &reason);
+                    carray*            carray = NULL;
+                    if (capi) {
+                        carray = capi->toWritableCarray(L, arg, NULL);
+                    }
+                    if (!carray) {
+                        par->errorArg = arg;
+                        return raiseCarrayError(L, capi, reason);
+                    }
+                    capi->resizeCarray(carray, 0, false);
+                }
+                arg += 1;
+            }
             return i;
         }
         if (i % 10 == 0) {
@@ -237,19 +263,54 @@ int mtmsg_serialize_get_msg_args2(lua_State* L, GetMsgArgsPar* par)
                 break;
             }
             case BUFFER_CARRAY: {
-                if (!par->carrayCapi) {
-                    par->carrayCapi = carray_require_capi(L);
-                }
                 carray_type   type         = (unsigned char)buffer[p++];
                 unsigned char elementSize  = (unsigned char)buffer[p++];;
                 size_t        elementCount;
                 memcpy(&elementCount, buffer + p, sizeof(size_t));
                 p += sizeof(size_t);
-                void* data;
-                if (!par->carrayCapi->newCarray(L, type, CARRAY_DEFAULT, elementCount, &data)) {
-                    luaL_error(L, "internal error creating carray for type %d", type);
-                }
                 size_t len = elementSize * elementCount;
+
+                const carray_capi* capi   = NULL;
+                carray*            carray = NULL;
+                while (arg <= argTop) {
+                    if (!lua_isnil(L, arg)) {
+                        int reason;
+                        capi = carray_get_capi(L, arg, &reason);
+                        carray_info info;
+                        if (capi) {
+                            carray = capi->toWritableCarray(L, arg, &info);
+                        }
+                        if (!carray) {
+                            par->errorArg = arg;
+                            return raiseCarrayError(L, capi, reason);
+                        }
+                        arg += 1;
+                        if (info.type == type && info.elementSize == elementSize) {
+                            break;
+                        }
+                        capi->resizeCarray(carray, 0, false);
+                        capi      = NULL;
+                        carray    = NULL;
+                    } else {
+                        arg += 1;
+                    }
+                }
+                void* data;
+                if (carray) {
+                    data = capi->resizeCarray(carray, elementCount, false);
+                    if (!data) {
+                        par->errorArg = arg - 1;
+                        return luaL_error(L, "cannot resize carray");
+                    }
+                    lua_pushvalue(L, arg - 1);
+                } else {
+                    if (!par->carrayCapi) {
+                        par->carrayCapi = carray_require_capi(L);
+                    }
+                    if (!par->carrayCapi->newCarray(L, type, CARRAY_DEFAULT, elementCount, &data)) {
+                        return luaL_error(L, "internal error creating carray for type %d", type);
+                    }
+                }
                 memcpy(data, buffer + p, len);
                 p += len;
                 break;

@@ -1,8 +1,11 @@
+#define CARRAY_CAPI_IMPLEMENT_GET_CAPI   1
+
 #include "reader.h"
 #include "buffer.h"
 #include "listener.h"
 #include "error.h"
 #include "serialize.h"
+#include "carray_capi.h"
 
 static const char* const MTMSG_READER_CLASS_NAME = "mtmsg.reader";
 
@@ -80,13 +83,27 @@ static int Reader_next(lua_State* L)
 {
     int arg = 1;
     ReaderUserData* udata = luaL_checkudata(L, arg++, MTMSG_READER_CLASS_NAME);
-
+    
+    int argTop = lua_gettop(L);
+    
     lua_Integer count = 1;
-    if (lua_gettop(L) >= arg) {
-        count = luaL_checkinteger(L, arg++);
-    }
-    if (count <= 0 || udata->mem.bufferLength == 0) {
-        return 0;
+    if (arg <= argTop) {
+        int t = lua_type(L, arg);
+        if (t == LUA_TNIL || t == LUA_TNUMBER) {
+            if (t == LUA_TNUMBER) {
+                count = luaL_checkinteger(L, arg);
+            }
+            arg += 1;
+        } else {
+            int reason = 0;
+            if (t != LUA_TUSERDATA || !carray_get_capi(L, arg, &reason)) {
+                if (reason == 1) {
+                    return luaL_argerror(L, arg, "incompatible carray capi version number");
+                } else {
+                    return luaL_argerror(L, arg, "integer or carray expected");
+                }
+            }
+        }
     }
     GetMsgArgsPar par; par.inBuffer       = udata->mem.bufferStart;
                        par.inBufferSize   = udata->mem.bufferLength;
@@ -94,7 +111,21 @@ static int Reader_next(lua_State* L)
                        par.parsedLength   = 0;
                        par.parsedArgCount = 0;
                        par.carrayCapi     = udata->carrayCapi;
-    mtmsg_serialize_get_msg_args2(L, &par);
+                       par.errorArg       = 0;
+
+    lua_pushcfunction(L, mtmsg_serialize_get_msg_args);
+    lua_insert(L, arg);
+    lua_pushlightuserdata(L, &par);
+    lua_insert(L, arg + 1);
+    int nargs = argTop - arg + 1;
+    int rc = lua_pcall(L, nargs + 1, LUA_MULTRET, 0);
+    if (rc != LUA_OK) {
+        if (par.errorArg) {
+            return luaL_argerror(L, arg + par.errorArg - 2, lua_tostring(L, -1));
+        } else {
+            return lua_error(L);
+        }
+    }
     udata->carrayCapi = par.carrayCapi;
     udata->mem.bufferLength -= par.parsedLength;
     if (udata->mem.bufferLength == 0) {

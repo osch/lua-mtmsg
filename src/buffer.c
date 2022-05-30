@@ -4,6 +4,8 @@
 #define RECEIVER_CAPI_IMPLEMENT_SET_CAPI 1
 #define SENDER_CAPI_IMPLEMENT_SET_CAPI   1
 
+#define CARRAY_CAPI_IMPLEMENT_GET_CAPI   1
+
 #include "buffer.h"
 #include "listener.h"
 #include "serialize.h"
@@ -12,6 +14,7 @@
 #include "receiver_capi_impl.h"
 #include "sender_capi_impl.h"
 #include "notify_capi_impl.h"
+#include "carray_capi.h"
 
 const char* const MTMSG_BUFFER_CLASS_NAME = "mtmsg.buffer";
 
@@ -793,16 +796,41 @@ int mtmsg_buffer_next_msg(lua_State* L, BufferUserData* udata,
                           MsgBuffer* b, bool nonblock, int arg, double timeoutSeconds , MemBuffer* resultBuffer, size_t* argsSize,
                           sender_error_handler sender_eh, void* sender_ehdata)
 {
-    lua_Number endTime   = 0; /* 0 = no timeout */
-
+    lua_Number endTime   = -1; /* -1 = no timeout, wait forever */
+    int argTop = 0;
     if (L) {
-        if (arg && !lua_isnoneornil(L, arg)) {
-            lua_Number waitSeconds = luaL_checknumber(L, arg);
-            endTime = mtmsg_current_time_seconds() + waitSeconds;
+        argTop = lua_gettop(L);
+        if (arg && arg <= argTop) {
+            int t = lua_type(L, arg);
+            if (t == LUA_TNIL || t == LUA_TNUMBER) {
+                if (t == LUA_TNUMBER) {
+                    lua_Number waitSeconds = lua_tonumber(L, arg);
+                    if (waitSeconds < 0) waitSeconds = 0;
+                    endTime = mtmsg_current_time_seconds() + waitSeconds;
+                    if (waitSeconds == 0) {
+                        nonblock = true;
+                    }
+                }
+                arg += 1;
+            } else {
+                int reason = 0;
+                if (t != LUA_TUSERDATA || !carray_get_capi(L, arg, &reason)) {
+                    if (reason == 1) {
+                        return luaL_argerror(L, arg, "incompatible carray capi version number");
+                    } else if (!resultBuffer) {
+                        return luaL_argerror(L, arg, "timeout seconds or carray expected");
+                    } else {
+                        return luaL_argerror(L, arg, "timeout seconds expected");
+                    }
+                }
+            }
         }
     } else {
-        if (timeoutSeconds >= 0) {
+        if (timeoutSeconds >= 0) { /* timeoutSeconds < 0 -> no timeout, wait forever */
             endTime = mtmsg_current_time_seconds() + timeoutSeconds;
+            if (timeoutSeconds == 0) {
+                nonblock = true;
+            }
         }
     }
 
@@ -848,13 +876,21 @@ again:
                                par.inMaxArgCount  = -1;
                                par.parsedLength   = 0;
                                par.parsedArgCount = 0;
-                               par.carrayCapi     = udata->carrayCapi;
+                               par.carrayCapi     = udata->carrayCapi; 
+                               par.errorArg       = 0;
             lua_pushcfunction(L, mtmsg_serialize_get_msg_args);
+            lua_insert(L, arg);
             lua_pushlightuserdata(L, &par);
-            int rc = lua_pcall(L, 1, LUA_MULTRET, 0);
+            lua_insert(L, arg + 1);
+            int nargs = argTop - arg + 1;
+            int rc = lua_pcall(L, nargs + 1, LUA_MULTRET, 0);
             if (rc != LUA_OK) {
                 async_mutex_unlock(b->sharedMutex);
-                return lua_error(L);
+                if (par.errorArg) {
+                    return luaL_argerror(L, arg + par.errorArg - 2, lua_tostring(L, -1));
+                } else {
+                    return lua_error(L);
+                }
             }
             rslt = par.parsedArgCount;
             udata->carrayCapi = par.carrayCapi;
@@ -912,7 +948,7 @@ again:
         }
         return rslt;
     } else {
-        if (endTime > 0) {
+        if (endTime >= 0) {
             lua_Number now = mtmsg_current_time_seconds();
             if (now < endTime) {
                 async_mutex_wait_millis(b->sharedMutex, (int)((endTime - now) * 1000 + 0.5));

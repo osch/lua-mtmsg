@@ -23,12 +23,26 @@
 #  define SENDER_CAPI_IMPLEMENT_GET_CAPI 0
 #endif
 
+#ifdef __cplusplus
+
+extern "C" {
+
+struct sender_object;
+struct sender_reader;
+struct sender_capi;
+struct sender_capi_value;
+
+#else /* __cplusplus */
+
 typedef struct sender_object          sender_object;
 typedef struct sender_reader          sender_reader;
 typedef struct sender_capi            sender_capi;
-typedef enum   sender_capi_value_type sender_capi_value_type;
 typedef struct sender_capi_value      sender_capi_value;
+
+typedef enum   sender_capi_value_type sender_capi_value_type;
 typedef enum   sender_array_type      sender_array_type;
+
+#endif /* ! __cplusplus */
 
 enum sender_capi_value_type
 {
@@ -209,7 +223,7 @@ struct sender_capi
 static int sender_set_capi(lua_State* L, int index, const sender_capi* capi)
 {
     lua_pushlstring(L, SENDER_CAPI_ID_STRING, strlen(SENDER_CAPI_ID_STRING));           /* -> key */
-    void** udata = lua_newuserdata(L, sizeof(void*) + strlen(SENDER_CAPI_ID_STRING) + 1); /* -> key, value */
+    void** udata = (void**) lua_newuserdata(L, sizeof(void*) + strlen(SENDER_CAPI_ID_STRING) + 1); /* -> key, value */
     *udata = (void*)capi;
     strcpy((char*)(udata + 1), SENDER_CAPI_ID_STRING);  /* -> key, value */
     lua_rawset(L, (index < 0) ? (index - 2) : index);     /* -> */
@@ -229,14 +243,14 @@ static const sender_capi* sender_get_capi(lua_State* L, int index, int* errorRea
 {
     if (luaL_getmetafield(L, index, SENDER_CAPI_ID_STRING) != LUA_TNIL)      /* -> _capi */
     {
-        void** udata = lua_touserdata(L, -1);                                  /* -> _capi */
+        const void** udata = (const void**) lua_touserdata(L, -1);           /* -> _capi */
 
         if (   udata
             && (lua_rawlen(L, -1) >= sizeof(void*) + strlen(SENDER_CAPI_ID_STRING) + 1)
             && (memcmp((char*)(udata + 1), SENDER_CAPI_ID_STRING, 
                        strlen(SENDER_CAPI_ID_STRING) + 1) == 0))
         {
-            const sender_capi* capi = *udata;                                /* -> _capi */
+            const sender_capi* capi = (const sender_capi*) *udata;             /* -> _capi */
             while (capi) {
                 if (   capi->version_major == SENDER_CAPI_VERSION_MAJOR
                     && capi->version_minor >= SENDER_CAPI_VERSION_MINOR)
@@ -244,7 +258,7 @@ static const sender_capi* sender_get_capi(lua_State* L, int index, int* errorRea
                     lua_pop(L, 1);                                             /* -> */
                     return capi;
                 }
-                capi = capi->next_capi;
+                capi = (const sender_capi*) capi->next_capi;
             }
             if (errorReason) {
                 *errorReason = 1;
@@ -263,5 +277,9 @@ static const sender_capi* sender_get_capi(lua_State* L, int index, int* errorRea
     return NULL;
 }
 #endif /* SENDER_CAPI_IMPLEMENT_GET_CAPI */
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif /* SENDER_CAPI_H */

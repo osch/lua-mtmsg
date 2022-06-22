@@ -211,6 +211,7 @@ const receiver_capi mtmsg_receiver_capi_impl =
     clearWriter,
     addBooleanToWriter,
     addIntegerToWriter,
+    addNumberToWriter,
     addStringToWriter,
     addBytesToWriter,
     addArrayToWriter

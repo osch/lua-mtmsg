@@ -161,7 +161,7 @@ static void* addArrayToWriter(receiver_writer* writer, receiver_array_type type,
         default: return NULL;
     }
     carray_info info = {0};
-    info.type = carrayType;
+    info.elementType  = carrayType;
     info.elementSize  = elementSize;
     info.elementCount = elementCount;
     size_t args_size = mtmsg_serialize_calc_carray_size(&info);

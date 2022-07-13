@@ -129,7 +129,7 @@ static inline char* mtmsg_serialize_cfunction_to_buffer(lua_CFunction value, cha
 static inline char* mtmsg_serialize_carray_header_to_buffer(carray_info* info, char* buffer)
 {
     *buffer++ = BUFFER_CARRAY;
-    *buffer++ = info->type;
+    *buffer++ = info->elementType;
     *buffer++ = (unsigned char)info->elementSize;
     memcpy(buffer, &info->elementCount, sizeof(size_t));
     buffer += sizeof(size_t);
